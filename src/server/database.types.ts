@@ -218,7 +218,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_quick_settle: {
+        Args: {
+          p_slug: string
+          p_name: string
+          p_member_names: string[]
+          p_amount: number
+          p_paid_by_index: number
+          p_shares: number[]
+          p_description: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
