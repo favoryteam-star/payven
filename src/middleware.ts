@@ -4,6 +4,14 @@ import { createServerClient } from '@supabase/ssr'
 // 매 요청마다 세션 토큰을 갱신해 쿠키를 새로 쓴다(@supabase/ssr 권장 패턴).
 // 미들웨어는 next/headers cookies()를 못 쓰므로 req/res 쿠키로 자체 클라이언트를 만든다.
 export async function middleware(req: NextRequest) {
+  // OAuth 인가코드가 콜백이 아닌 곳(예: Supabase Site URL = '/')으로 떨어지면 콜백으로 라우팅해 세션 교환.
+  // 페이븐은 OAuth 외엔 ?code= 를 쓰지 않으므로 안전.
+  if (req.nextUrl.searchParams.has('code') && !req.nextUrl.pathname.startsWith('/auth/')) {
+    const cb = req.nextUrl.clone()
+    cb.pathname = '/auth/callback'
+    return NextResponse.redirect(cb)
+  }
+
   let res = NextResponse.next({ request: req })
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
