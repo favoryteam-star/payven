@@ -1,6 +1,39 @@
+import { getAuthUser } from '@/server/auth'
 import { IcoUser } from '@/components/icons'
 
-export default function MyPage() {
+// 마이 탭 — 서버 컴포넌트로 세션을 읽어 로그인 상태 표시. 만들기 게이트는 정산하기 시점(별도).
+export default async function MyPage() {
+  const user = await getAuthUser()
+
+  if (user) {
+    const meta = user.user_metadata ?? {}
+    const name =
+      (meta.name as string) ||
+      (meta.full_name as string) ||
+      (meta.user_name as string) ||
+      (meta.nickname as string) ||
+      '사용자'
+    return (
+      <main className="px-5 pt-6">
+        <h1 className="mb-6 text-xl font-bold tracking-tight">마이</h1>
+        <div className="flex items-center gap-3 rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-4 dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-brand">
+            <IcoUser className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-[15px] font-semibold">{name}</p>
+            <p className="text-sm text-neutral-400">카카오 로그인</p>
+          </div>
+        </div>
+        <form action="/auth/logout" method="post" className="mt-4">
+          <button className="w-full rounded-2xl border border-neutral-200 py-3 text-sm font-medium text-neutral-500 transition hover:text-neutral-700 dark:border-neutral-700 dark:hover:text-neutral-300">
+            로그아웃
+          </button>
+        </form>
+      </main>
+    )
+  }
+
   return (
     <main className="px-5 pt-6">
       <h1 className="mb-6 text-xl font-bold tracking-tight">마이</h1>
@@ -10,14 +43,14 @@ export default function MyPage() {
         </div>
         <div>
           <p className="text-[15px] font-medium">로그인하면 정산을 저장할 수 있어요</p>
-          <p className="mt-1 text-sm text-neutral-400">카카오·구글·이메일로 곧 로그인할 수 있어요</p>
+          <p className="mt-1 text-sm text-neutral-400">카카오로 1초 만에 시작</p>
         </div>
-        <button
-          disabled
-          className="w-full max-w-xs rounded-2xl bg-neutral-200 py-3.5 text-sm font-semibold text-neutral-500 dark:bg-neutral-700"
+        <a
+          href="/auth/login?provider=kakao&next=/my"
+          className="w-full max-w-xs rounded-2xl bg-[#FEE500] py-3.5 text-center text-sm font-semibold text-[#191600] transition active:scale-[0.99]"
         >
-          로그인 (준비 중)
-        </button>
+          카카오로 시작하기
+        </a>
       </div>
     </main>
   )
