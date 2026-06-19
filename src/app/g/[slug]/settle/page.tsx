@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { formatWon } from '@/domain/money'
+import { formatAccountNo } from '@/lib/account'
 import { minimizeCashFlow, netBalances } from '@/domain/settle'
 import { getGroupBySlug } from '@/server/queries'
 import { ShareButton } from '@/components/ShareButton'
@@ -97,7 +98,7 @@ export default async function SettlePage({ params }: Params) {
                     <div className="min-w-0 text-sm">
                       <div className="truncate">
                         <span className="text-neutral-500">{receiver.bankName}</span>{' '}
-                        <span className="num">{receiver.accountNo}</span>
+                        <span className="num">{formatAccountNo(receiver.bankName!, receiver.accountNo!)}</span>
                       </div>
                       {receiver.accountHolder && (
                         <div className="truncate text-xs text-neutral-400">

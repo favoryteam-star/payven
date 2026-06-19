@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { BANKS } from '@/lib/banks'
+import { formatAccountNo, onlyDigits } from '@/lib/account'
 import { getMyAccountsAction } from '@/app/actions'
 import { BankSelect } from './BankSelect'
 
@@ -73,17 +74,11 @@ export function resolveAccount(
       saveAccount: false,
     }
   }
-  // 저장 계좌 없음 → 인라인 입력(선택). 둘 다 비면 계좌 없이 정산.
-  const no = inline.no.trim()
+  // 저장 계좌 없음 → 인라인 입력(선택). 둘 다 비면 계좌 없이 정산. accountNo는 숫자만 저장.
+  const no = onlyDigits(inline.no)
   const holder = inline.holder.trim()
   if (!no && !holder) return { account: undefined, saveAccount: false }
-  const digits = no.replace(/\D/g, '').length
-  const valid =
-    holder.length >= 1 &&
-    holder.length <= 20 &&
-    digits >= 6 &&
-    digits <= 20 &&
-    /^[0-9][0-9-]*[0-9]$/.test(no)
+  const valid = holder.length >= 1 && holder.length <= 20 && no.length >= 6 && no.length <= 20
   if (!valid) {
     return {
       account: undefined,
@@ -137,9 +132,9 @@ export function AccountField({
     <div className="flex flex-col gap-2">
       <BankSelect value={inline.bank} onChange={(b) => onInline({ ...inline, bank: b })} />
       <input
-        value={inline.no}
-        onChange={(e) => onInline({ ...inline, no: e.target.value })}
-        placeholder="계좌번호 (숫자·하이픈)"
+        value={formatAccountNo(inline.bank, inline.no)}
+        onChange={(e) => onInline({ ...inline, no: onlyDigits(e.target.value) })}
+        placeholder="계좌번호 (숫자만)"
         inputMode="numeric"
         className={`num ${fieldCls}`}
       />

@@ -5,16 +5,13 @@ import { BANKS } from '@/lib/banks'
 // bank_name은 banks.ts 화이트리스트(토스 딥링크 호환), account_no는 숫자·하이픈 허용(토스는 숫자만 사용).
 export const accountFieldsSchema = z.object({
   bankName: z.enum(BANKS),
+  // 숫자만 저장(하이픈은 화면 표시용). 들어온 값에 하이픈 등이 있어도 서버에서 제거 후 검증.
   accountNo: z
     .string()
     .trim()
-    .max(30)
-    .regex(/^[0-9][0-9-]*[0-9]$/, '계좌번호는 숫자와 하이픈만 입력해 주세요')
-    // 문자열 길이가 아니라 숫자 자릿수로 검증('12-3' 같은 3자리 통과 방지). 토스는 숫자만 사용.
-    .refine((s) => {
-      const digits = s.replace(/\D/g, '').length
-      return digits >= 6 && digits <= 20
-    }, '계좌번호 자릿수를 확인해 주세요(숫자 6~20자리)'),
+    .max(40)
+    .transform((s) => s.replace(/\D/g, ''))
+    .refine((d) => d.length >= 6 && d.length <= 20, '계좌번호를 확인해 주세요(숫자 6~20자리)'),
   accountHolder: z.string().trim().min(1, '예금주를 입력해 주세요').max(20),
 })
 

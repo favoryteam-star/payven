@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { BANKS } from '@/lib/banks'
+import { formatAccountNo, onlyDigits } from '@/lib/account'
 import {
   deleteAccountAction,
   saveAccountAction,
@@ -29,10 +30,8 @@ function validate(f: FormState): string | null {
   if (!BANKS.includes(f.bankName as (typeof BANKS)[number])) return '은행을 선택해 주세요'
   const holder = f.accountHolder.trim()
   if (holder.length < 1 || holder.length > 20) return '예금주를 확인해 주세요'
-  const no = f.accountNo.trim()
-  const digits = no.replace(/\D/g, '').length
-  if (no.length > 30 || !/^[0-9][0-9-]*[0-9]$/.test(no) || digits < 6 || digits > 20)
-    return '계좌번호를 확인해 주세요(숫자 6~20자리)'
+  const no = onlyDigits(f.accountNo)
+  if (no.length < 6 || no.length > 20) return '계좌번호를 확인해 주세요(숫자 6~20자리)'
   return null
 }
 
@@ -51,7 +50,7 @@ function AccountForm({
     initial
       ? {
           bankName: initial.bankName,
-          accountNo: initial.accountNo,
+          accountNo: onlyDigits(initial.accountNo),
           accountHolder: initial.accountHolder,
           label: initial.label ?? '',
           makeDefault: initial.isDefault,
@@ -68,7 +67,7 @@ function AccountForm({
     setErr(null)
     onSubmit({
       ...form,
-      accountNo: form.accountNo.trim(),
+      accountNo: onlyDigits(form.accountNo),
       accountHolder: form.accountHolder.trim(),
       label: form.label.trim(),
     })
@@ -79,9 +78,9 @@ function AccountForm({
       <div className="flex flex-col gap-2.5">
         <BankSelect value={form.bankName} onChange={(b) => set('bankName', b)} />
         <input
-          value={form.accountNo}
-          onChange={(e) => set('accountNo', e.target.value)}
-          placeholder="계좌번호 (숫자·하이픈)"
+          value={formatAccountNo(form.bankName, form.accountNo)}
+          onChange={(e) => set('accountNo', onlyDigits(e.target.value))}
+          placeholder="계좌번호 (숫자만)"
           inputMode="numeric"
           className={`num ${inputCls}`}
         />
@@ -220,7 +219,9 @@ export function AccountManager({ initial }: { initial: SavedAccountDTO[] }) {
                       </span>
                     )}
                   </div>
-                  <div className="num mt-0.5 truncate text-sm text-neutral-500">{a.accountNo}</div>
+                  <div className="num mt-0.5 truncate text-sm text-neutral-500">
+                    {formatAccountNo(a.bankName, a.accountNo)}
+                  </div>
                   <div className="mt-0.5 truncate text-sm text-neutral-400">
                     예금주 {a.accountHolder}
                     {a.label?.trim() ? ` · ${a.label.trim()}` : ''}
