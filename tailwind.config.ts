@@ -8,15 +8,15 @@ export default {
         sans: ['"Pretendard Variable"', 'Pretendard', 'system-ui', 'sans-serif'],
       },
       colors: {
-        // 토스풍 단일 강조 블루
+        // 페이븐 단일 강조 — 에메랄드 그린 ("even/맞춘다·돈"). 토스블루·네이버형광초록 회피.
         brand: {
-          50: '#EBF2FE',
-          100: '#D6E4FD',
-          200: '#AFC9FB',
-          500: '#3182F6',
-          600: '#2272EB',
-          700: '#1B64DA',
-          DEFAULT: '#3182F6',
+          50: '#E9F8F1',
+          100: '#C6EEDC',
+          200: '#92DFBF',
+          500: '#14B488',
+          600: '#0FA177',
+          700: '#0B7E5E',
+          DEFAULT: '#0FA177',
         },
       },
       borderRadius: {
