@@ -10,6 +10,7 @@ import {
   updateAccountAction,
 } from '@/app/actions'
 import type { SavedAccountDTO } from '@/components/AccountSelect'
+import { BankSelect } from '@/components/BankSelect'
 import { IcoPlus } from '@/components/icons'
 
 type FormState = {
@@ -76,18 +77,7 @@ function AccountForm({
   return (
     <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex flex-col gap-2.5">
-        <select
-          value={form.bankName}
-          onChange={(e) => set('bankName', e.target.value)}
-          className={inputCls}
-          aria-label="은행"
-        >
-          {BANKS.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
+        <BankSelect value={form.bankName} onChange={(b) => set('bankName', b)} />
         <input
           value={form.accountNo}
           onChange={(e) => set('accountNo', e.target.value)}

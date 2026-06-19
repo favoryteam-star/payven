@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { BANKS } from '@/lib/banks'
 import { getMyAccountsAction } from '@/app/actions'
+import { BankSelect } from './BankSelect'
 
 // 저장 계좌 DTO는 서버 액션 반환 타입에서 추론(server-only 런타임 import 없이 타입만 흐른다).
 export type SavedAccountDTO = Awaited<ReturnType<typeof getMyAccountsAction>>[number]
@@ -134,18 +135,7 @@ export function AccountField({
   }
   return (
     <div className="flex flex-col gap-2">
-      <select
-        value={inline.bank}
-        onChange={(e) => onInline({ ...inline, bank: e.target.value })}
-        className={fieldCls}
-        aria-label="은행"
-      >
-        {BANKS.map((b) => (
-          <option key={b} value={b}>
-            {b}
-          </option>
-        ))}
-      </select>
+      <BankSelect value={inline.bank} onChange={(b) => onInline({ ...inline, bank: b })} />
       <input
         value={inline.no}
         onChange={(e) => onInline({ ...inline, no: e.target.value })}
