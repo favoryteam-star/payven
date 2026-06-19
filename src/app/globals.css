@@ -9,3 +9,31 @@
 html {
   -webkit-text-size-adjust: 100%;
 }
+
+body {
+  /* 모바일 앱 느낌: 가로 스크롤/바운스 억제, 탭 하이라이트 제거 */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer utilities {
+  /* 숫자는 항상 고정폭 — 입력/애니메이션 중 자릿수가 안 흔들림 */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+  /* iOS 홈바 안전영역 */
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  }
+  .h-safe-bottom {
+    height: env(safe-area-inset-bottom);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

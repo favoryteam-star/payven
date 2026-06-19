@@ -1,9 +1,28 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
 
 export const metadata: Metadata = {
   title: '페이븐 — 1초 정산',
-  description: '무로그인 링크로 친구·모임 정산. 내고 똑같이 맞춘다.',
+  description: '무로그인으로 바로 더치페이. 술값·밥값, 계산기 대신 페이븐.',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: '페이븐',
+  },
+  icons: {
+    icon: '/icon.svg',
+    apple: '/icon.svg',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#ffffff',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
@@ -13,8 +32,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body className="bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-50">
-        {children}
+      <body className="bg-neutral-50 font-sans text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-50">
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendard-variable.min.css"
+        />
+        {/* 모바일 앱 컨테이너 — 데스크톱에서도 가운데 좁게 */}
+        <div className="mx-auto min-h-dvh w-full max-w-app bg-white dark:bg-neutral-950">
+          {children}
+        </div>
+        <ServiceWorkerRegister />
       </body>
     </html>
   )
