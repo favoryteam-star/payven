@@ -7,6 +7,7 @@ import {
   quickSettleSchema,
   saveAccountSchema,
   updateAccountSchema,
+  type AccountFields,
 } from '@/server/validation'
 import {
   addItemizedBill,
@@ -24,18 +25,40 @@ import { getAuthUser } from '@/server/auth'
 // 만들기 = 로그인 게이트: 미로그인이면 needLogin 신호(클라가 입력값 보존 후 로그인으로). 보기는 무로그인 유지.
 type CreateResult = { slug: string } | { needLogin: true }
 
+// 인라인으로 직접 입력한 계좌면 정산 시 내 저장 계좌에 추가(다음부턴 자동 채움).
+// 베스트에포트: 저장 실패해도 정산은 유지. 중복(은행+계좌 숫자)이면 건너뜀.
+async function maybeSaveAccount(
+  userId: string,
+  account: AccountFields | undefined,
+  save: boolean | undefined,
+): Promise<void> {
+  if (!save || !account) return
+  try {
+    const norm = (s: string) => s.replace(/\D/g, '')
+    const existing = await listUserAccounts(userId)
+    const dup = existing.some((a) => a.bankName === account.bankName && norm(a.accountNo) === norm(account.accountNo))
+    if (!dup) await createUserAccount(userId, account)
+  } catch {
+    // 저장 실패는 정산을 막지 않음(보조 기능)
+  }
+}
+
 export const quickSettleAction = withRateLimit(async (raw: unknown): Promise<CreateResult> => {
   const user = await getAuthUser()
   if (!user) return { needLogin: true }
   const input = quickSettleSchema.parse(raw)
-  return createQuickSettle(input, user.id)
+  const result = await createQuickSettle(input, user.id)
+  await maybeSaveAccount(user.id, input.account, input.saveAccount)
+  return result
 })
 
 export const addItemizedBillAction = withRateLimit(async (raw: unknown): Promise<CreateResult> => {
   const user = await getAuthUser()
   if (!user) return { needLogin: true }
   const input = itemizedBillSchema.parse(raw)
-  return addItemizedBill(input, user.id)
+  const result = await addItemizedBill(input, user.id)
+  await maybeSaveAccount(user.id, input.account, input.saveAccount)
+  return result
 })
 
 // ── 저장 계좌(받는 사람 계좌) ──────────────────────────────────────

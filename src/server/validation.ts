@@ -49,6 +49,8 @@ export const quickSettleSchema = z.object({
     .max(30),
   payerIndex: z.number().int().min(0),
   account: accountFieldsSchema.optional(),
+  // 인라인으로 직접 입력한 계좌면 정산 시 내 저장 계좌에 추가(저장 계좌에서 고른 거면 false).
+  saveAccount: z.boolean().optional(),
 })
 
 export type QuickSettleInput = z.infer<typeof quickSettleSchema>
@@ -81,6 +83,7 @@ export const itemizedBillSchema = z
       .min(1, '항목이 최소 1개 필요합니다')
       .max(50),
     account: accountFieldsSchema.optional(),
+    saveAccount: z.boolean().optional(),
   })
   .superRefine((val, ctx) => {
     const n = val.members.length

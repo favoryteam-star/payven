@@ -51,7 +51,8 @@
 - **schema 0006**(`user_accounts`: user_id→auth.users·은행/계좌/예금주/별칭/`is_default`, 부분 유니크 `where is_default`, RLS deny-all+REVOKE) + **`members.account_holder`(예금주)**. **0007**: 두 생성 RPC에 `p_acct_{bank,no,holder}` 추가 → **멤버 0('나')에 부착**('내 계좌만'). `database.types.ts` 재생성.
 - **server**: 저장계좌 CRUD(전부 `user_id` 스코프; 기본 1개 불변식 = '먼저 끄고 켜기'로 유니크 인덱스 충돌 회피). `getGroupBySlug`에 `account_holder` 추가.
 - **actions**: `getMyAccountsAction`(읽기) + `save/update/delete/setDefaultAccountAction`(로그인 필수·withRateLimit·zod).
-- **UI**: 마이=`AccountManager`(추가/수정/삭제/기본지정) · 만들기 두 폼=`AccountSelect`(칩, 기본 자동선택, 로그인 왕복 자동제출 시 계좌 로딩 후 제출) · 정산 결과=받는사람 은행/계좌/예금주 + `[계좌 복사]`+`[토스 송금]`(ADR-008 빌더 연결).
+- **UI**: 마이=`AccountManager`(추가/수정/삭제/기본지정) · 만들기 두 폼=`AccountField`(저장계좌 있으면 **칩**+기본 자동선택 / 없으면 **인라인 입력**[은행·계좌·예금주, 선택] → 입력하면 정산 시 저장돼 다음부턴 자동채움, `resolveAccount`/`saveAccount`; 로그인 왕복에 입력값 보존) · 정산 결과=받는사람 은행/계좌/예금주 + `[계좌 복사]`+`[토스 송금]`(ADR-008 빌더 연결).
+- **UX 피드백 반영(2026-06-20)**: "저장계좌 없을 때 안내 링크만 뜨는 게 별로" → **인라인 입력란**으로 교체(입력→정산→자동 저장, 비우면 계좌 없이). 액션이 인라인 입력 계좌를 베스트에포트로 저장(중복 시 건너뜀). 브라우저로 렌더·컨트롤드 입력 확인.
 - **불변식 하드닝(0008, 적대적 리뷰 32에이전트 반영)**: 기본 1개 전환을 원자적 RPC로(동시요청 제로-기본 창·유니크 충돌 제거) — `set_default_account`(한 트랜잭션 OFF→ON·미존재 no-op)·`delete_account`(삭제+가장 오래된 승격, `created_at,id` 결정적). create는 `is_default=false` 삽입 후 RPC 전환. 계좌번호 검증=숫자 자릿수(6~20). 실DB로 전환·삭제승격·미존재 no-op·항상 dc=1 검증.
 - **검증**: RPC 멤버0 부착 실DB e2e · `user_accounts` RLS/정책0/REVOKE/유니크인덱스 카탈로그 확인 · 정산결과 무로그인 렌더 프리뷰(콘솔 0 에러) · 새 기본/삭제 RPC 실DB e2e · build·lint·test(34) green. **잔여(수동)**: 카카오 로그인 후 마이 CRUD·만들기 자동채움 폰 스모크.
 - **결정 핀**: 받는 사람 범위='내 계좌만', 저장='여러 개+기본 지정'(사용자 선택).

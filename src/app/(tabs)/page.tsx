@@ -9,7 +9,7 @@ import { IcoPlus } from '@/components/icons'
 import { Wordmark } from '@/components/Logo'
 import { ModeChips } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
-import { AccountSelect, useMyAccounts } from '@/components/AccountSelect'
+import { AccountField, EMPTY_INLINE, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 
 export default function Home() {
   const router = useRouter()
@@ -22,16 +22,14 @@ export default function Home() {
   const [autoSubmit, setAutoSubmit] = useState(false)
   const [pending, startTransition] = useTransition()
 
-  // 받을 계좌(내 저장 계좌). null=로딩, []=없음/미로그인. accountId undefined=미선택(기본 자동).
+  // 받을 계좌. null=로딩. 저장계좌 있으면 칩(accountId), 없으면 인라인 입력(acct). undefined=미선택(기본 자동).
   const accounts = useMyAccounts()
   const [accountId, setAccountId] = useState<string | undefined>(undefined)
-  const chosenAccount =
+  const [acct, setAcct] = useState<InlineAcct>(EMPTY_INLINE)
+  const accountChipValue =
     accountId === undefined
-      ? accounts?.find((a) => a.isDefault) ?? accounts?.[0]
-      : accountId === ''
-        ? undefined
-        : accounts?.find((a) => a.id === accountId)
-  const accountValue = accountId === undefined ? (chosenAccount?.id ?? '') : accountId
+      ? (accounts?.find((a) => a.isDefault)?.id ?? accounts?.[0]?.id ?? '')
+      : accountId
 
   // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원 + 자동 제출(두 번 안 누르게)
   useEffect(() => {
@@ -46,6 +44,7 @@ export default function Home() {
       if (typeof d.amount === 'number') setAmount(d.amount)
       if (Array.isArray(d.members)) setMembers(d.members)
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
+      if (d.acct && typeof d.acct === 'object') setAcct(d.acct)
       setAutoSubmit(true)
     } catch {
       /* 손상된 draft 무시 */
@@ -62,7 +61,7 @@ export default function Home() {
   }, [autoSubmit, accounts])
 
   const goLogin = () => {
-    sessionStorage.setItem('payven:draft:quick', JSON.stringify({ amount, members, payerIndex }))
+    sessionStorage.setItem('payven:draft:quick', JSON.stringify({ amount, members, payerIndex, acct }))
     window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
   }
 
@@ -85,16 +84,17 @@ export default function Home() {
     if (names.length < 2) return setError('최소 2명이 필요해요')
     const payerName = trimmed[payerIndex] || names[0]
     const payerIdx = Math.max(0, names.indexOf(payerName))
-    const account = chosenAccount
-      ? {
-          bankName: chosenAccount.bankName,
-          accountNo: chosenAccount.accountNo,
-          accountHolder: chosenAccount.accountHolder,
-        }
-      : undefined
+    const resolved = resolveAccount(accounts, accountId, acct)
+    if (resolved.error) return setError(resolved.error)
     startTransition(async () => {
       try {
-        const res = await quickSettleAction({ amount, members: names, payerIndex: payerIdx, account })
+        const res = await quickSettleAction({
+          amount,
+          members: names,
+          payerIndex: payerIdx,
+          account: resolved.account,
+          saveAccount: resolved.saveAccount,
+        })
         if ('needLogin' in res) {
           setLoginPrompt(true) // 로그인 안내 시트 → 카카오로 계속하기
           return
@@ -189,20 +189,25 @@ export default function Home() {
         </section>
       )}
 
-      {/* 받을 계좌(내 저장 계좌). 정산 결과에서 친구들이 이 계좌로 보냄. */}
-      {accounts && accounts.length > 0 && (
+      {/* 받을 계좌. 저장계좌 있으면 칩, 없으면 인라인 입력(선택). 정산 결과에서 친구들이 이 계좌로 보냄. */}
+      {accounts !== null && (
         <section className="mb-5">
-          <p className="mb-2 text-sm font-medium text-neutral-500">어디로 받을까요?</p>
-          <AccountSelect accounts={accounts} value={accountValue} onChange={setAccountId} />
+          <p className="mb-2 text-sm font-medium text-neutral-500">
+            어디로 받을까요? <span className="font-normal text-neutral-400">(선택)</span>
+          </p>
+          <AccountField
+            accounts={accounts}
+            accountId={accountChipValue}
+            onSelect={setAccountId}
+            inline={acct}
+            onInline={setAcct}
+          />
+          {accounts.length === 0 && (
+            <p className="mt-1.5 text-xs text-neutral-400">
+              입력하면 정산에 표시되고, 다음부턴 자동으로 채워져요. 비워두면 계좌 없이 정산돼요.
+            </p>
+          )}
         </section>
-      )}
-      {accounts !== null && accounts.length === 0 && (
-        <a
-          href="/my"
-          className="mb-5 block text-sm text-neutral-400 hover:text-brand"
-        >
-          + 받을 계좌를 저장해두면 다음부턴 자동으로 채워져요
-        </a>
       )}
 
       {perPerson > 0 && (
