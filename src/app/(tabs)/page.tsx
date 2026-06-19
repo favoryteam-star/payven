@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatWon } from '@/domain/money'
 import { quickSettleAction } from '@/app/actions'
@@ -21,6 +21,10 @@ export default function Home() {
   const [loginPrompt, setLoginPrompt] = useState(false)
   const [autoSubmit, setAutoSubmit] = useState(false)
   const [pending, startTransition] = useTransition()
+
+  // 멤버 입력에서 엔터 → 다음 칸으로(마지막이면 자동 추가). focusMember가 set되면 해당 칸에 포커스.
+  const memberRefs = useRef<(HTMLInputElement | null)[]>([])
+  const [focusMember, setFocusMember] = useState<number | null>(null)
 
   // 받을 계좌. null=로딩. 저장계좌 있으면 칩(accountId), 없으면 인라인 입력(acct). undefined=미선택(기본 자동).
   const accounts = useMyAccounts()
@@ -60,6 +64,13 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSubmit, accounts])
 
+  // 엔터로 추가/이동 후 해당 멤버 입력에 포커스
+  useEffect(() => {
+    if (focusMember === null) return
+    memberRefs.current[focusMember]?.focus()
+    setFocusMember(null)
+  }, [focusMember])
+
   const goLogin = () => {
     sessionStorage.setItem('payven:draft:quick', JSON.stringify({ amount, members, payerIndex, acct }))
     window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
@@ -74,6 +85,14 @@ export default function Home() {
   const removeMember = (i: number) => {
     setMembers((p) => (p.length <= 2 ? p : p.filter((_, idx) => idx !== i)))
     setPayerIndex((p) => (p === i ? 0 : p > i ? p - 1 : p))
+  }
+  // 엔터 → 빈 칸이면 무시, 마지막 칸이면 새 사람 추가, 그다음 칸으로 포커스 이동
+  const onMemberKeyDown = (e: KeyboardEvent<HTMLInputElement>, i: number) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    if (!members[i].trim()) return
+    if (i === members.length - 1) addMember()
+    setFocusMember(i + 1)
   }
 
   function submit() {
@@ -139,9 +158,14 @@ export default function Home() {
           {members.map((m, i) => (
             <div key={i} className="flex items-center gap-2">
               <input
+                ref={(el) => {
+                  memberRefs.current[i] = el
+                }}
                 value={m}
                 placeholder={i === 0 ? '나' : `친구 ${i}`}
                 onChange={(e) => setMember(i, e.target.value)}
+                onKeyDown={(e) => onMemberKeyDown(e, i)}
+                enterKeyHint="next"
                 className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] outline-none focus:border-brand dark:border-neutral-700"
               />
               {members.length > 2 && (
