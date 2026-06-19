@@ -1,6 +1,6 @@
-# 페이븐 — 다음 세션 핸드오프 (2026-06-19)
+# 페이븐 — 다음 세션 핸드오프 (2026-06-20)
 
-> 새 세션은 이 파일 + 메모리(자동 로드)부터 읽고 이어서 진행. 결정: **색=그린 확정**. **정체성·M3 항목별·M4 카카오 인증+만들기 게이트 완료·라이브(2026-06-19)**. 다음 = **사용자 UX 미세조정(목록 받기) → 구글 로그인 또는 M5 내역**.
+> 새 세션은 이 파일 + 메모리(자동 로드)부터 읽고 이어서 진행. 결정: **색=그린 확정**. **정체성·M3 항목별·M4 카카오 인증+만들기 게이트 완료·라이브(2026-06-19)**. **받는 사람 저장 계좌+예금주+토스 버튼 완료(2026-06-20, 작업 3)**. 다음 = **저장계좌 로그인 스모크 → 구글 로그인 또는 M5 내역**.
 
 ## 현재 상태 (M0~M3 + M4 카카오 인증·만들기 게이트 완료, 라이브)
 - 라이브(공유용): **`payven-hazel.vercel.app`** (에메랄드 그린). `git push origin main` → Vercel 자동배포.
@@ -9,10 +9,10 @@
 - 검증: `npm test`(34 green) · `npm run build` · `npm run lint` 통과.
 - 코드 지도:
   - `src/domain/` settle(`equalSplit`/`splitByWeights`·netBalances·minimizeCashFlow)·money·rules·types (정산 엔진, 테스트됨)
-  - `src/server/` db(service_role)·**`auth.ts`(@supabase/ssr, anon 서버전용·쿠키 세션)**·queries(createQuickSettle·addItemizedBill RPC+owner_id, getGroupBySlug)·ratelimit·validation·database.types
-  - `src/app/(tabs)/` 홈(숫자패드)·내역(빈)·마이(로그인/로그아웃) + `g/[slug]/settle` + `items`(항목별) + `auth/{login,callback,logout}` 라우트 + `actions.ts` + `src/middleware.ts`(세션갱신·`?code`→콜백 안전망)
-  - `src/components/` Logo·ModeChips·LoginSheet·Numpad·BottomNav·ShareButton·icons·ServiceWorkerRegister
-  - `supabase/migrations/0001~0005`(init·quick_settle·itemized·group owner_id·rpc owner_id)
+  - `src/server/` db(service_role)·**`auth.ts`(@supabase/ssr, anon 서버전용·쿠키 세션)**·queries(createQuickSettle·addItemizedBill RPC+owner_id+계좌, getGroupBySlug, **저장계좌 CRUD `listUserAccounts`/`createUserAccount`/`updateUserAccount`/`deleteUserAccount`/`setDefaultUserAccount`**)·ratelimit·validation(+`accountFieldsSchema`/`saveAccountSchema`/`updateAccountSchema`)·database.types
+  - `src/app/(tabs)/` 홈(숫자패드+**받을계좌선택**)·내역(빈)·마이(로그인/로그아웃+**내 계좌 관리** `_components/AccountManager`) + `g/[slug]/settle`(+**받는사람 계좌·계좌복사·토스송금** `_components/TossButton`) + `items`(항목별+받을계좌) + `auth/{login,callback,logout}` 라우트 + `actions.ts`(+저장계좌 액션 5종·`getMyAccountsAction`) + `src/middleware.ts`(세션갱신·`?code`→콜백 안전망)
+  - `src/components/` Logo·ModeChips·LoginSheet·Numpad·BottomNav·ShareButton·icons·ServiceWorkerRegister·**AccountSelect(`useMyAccounts` 훅+칩)**
+  - `supabase/migrations/0001~0008`(init·quick_settle·itemized·group owner_id·rpc owner_id·**user_accounts+members.account_holder**·**rpc 계좌 파라미터**·**기본계좌 원자 RPC `set_default_account`/`delete_account`**)
   - PWA: `app/manifest.ts`·`public/sw.js`(v3, `/auth` 우회)·`public/icon.svg`·`app-icon-{192,256,512}.png`(생성기 `scripts/gen-icon.js`)
 - 디자인 토큰: `tailwind.config.ts` brand = 그린 `#0FA177`. Pretendard, `.num`(tabular-nums), `pb-safe`.
 
@@ -46,9 +46,20 @@
 - 카카오 앱 `1491200`(비즈앱): 동의 닉네임/프사=선택·**이메일=필수**(+"값 없으면 입력 요청"). Supabase Kakao **"Allow users without email" ON**. Site URL은 프로덕션 권장(미들웨어 `?code` 안전망이 폴백 커버).
 - **남음(M4 잔여)**: 구글 로그인(같은 패턴 — Google Cloud OAuth 클라 + 인앱웹뷰 폴백) · 익명 게스트→`linkIdentity`.
 
+## ✅ 작업 3 — 받는 사람 저장 계좌 + 예금주 + 토스 버튼 연결 (완료 2026-06-20)
+택배주소처럼 **내 받을 계좌(은행/계좌번호/예금주)를 로그인 계정에 저장 → 만들기 때 자동 채움**. 상세 근거 [[DECISIONS#ADR-013]].
+- **schema 0006**(`user_accounts`: user_id→auth.users·은행/계좌/예금주/별칭/`is_default`, 부분 유니크 `where is_default`, RLS deny-all+REVOKE) + **`members.account_holder`(예금주)**. **0007**: 두 생성 RPC에 `p_acct_{bank,no,holder}` 추가 → **멤버 0('나')에 부착**('내 계좌만'). `database.types.ts` 재생성.
+- **server**: 저장계좌 CRUD(전부 `user_id` 스코프; 기본 1개 불변식 = '먼저 끄고 켜기'로 유니크 인덱스 충돌 회피). `getGroupBySlug`에 `account_holder` 추가.
+- **actions**: `getMyAccountsAction`(읽기) + `save/update/delete/setDefaultAccountAction`(로그인 필수·withRateLimit·zod).
+- **UI**: 마이=`AccountManager`(추가/수정/삭제/기본지정) · 만들기 두 폼=`AccountSelect`(칩, 기본 자동선택, 로그인 왕복 자동제출 시 계좌 로딩 후 제출) · 정산 결과=받는사람 은행/계좌/예금주 + `[계좌 복사]`+`[토스 송금]`(ADR-008 빌더 연결).
+- **불변식 하드닝(0008, 적대적 리뷰 32에이전트 반영)**: 기본 1개 전환을 원자적 RPC로(동시요청 제로-기본 창·유니크 충돌 제거) — `set_default_account`(한 트랜잭션 OFF→ON·미존재 no-op)·`delete_account`(삭제+가장 오래된 승격, `created_at,id` 결정적). create는 `is_default=false` 삽입 후 RPC 전환. 계좌번호 검증=숫자 자릿수(6~20). 실DB로 전환·삭제승격·미존재 no-op·항상 dc=1 검증.
+- **검증**: RPC 멤버0 부착 실DB e2e · `user_accounts` RLS/정책0/REVOKE/유니크인덱스 카탈로그 확인 · 정산결과 무로그인 렌더 프리뷰(콘솔 0 에러) · 새 기본/삭제 RPC 실DB e2e · build·lint·test(34) green. **잔여(수동)**: 카카오 로그인 후 마이 CRUD·만들기 자동채움 폰 스모크.
+- **결정 핀**: 받는 사람 범위='내 계좌만', 저장='여러 개+기본 지정'(사용자 선택).
+
 ## ▶ 다음 세션 시작점
-1. **사용자 UX 미세조정 먼저** — 사용자가 "조금씩 수정할 사항"이 있다고 함(이 세션에서 목록 미수령). 새 세션 시작 시 **무엇을 고칠지 먼저 물어보고** 반영.
-2. 그다음 택1: **구글 로그인 추가**(M4 잔여) 또는 **M5 내역**(내 정산 저장·내역탭 표시·`settlements` 완료기록).
+1. **저장 계좌 로그인 스모크** — 카카오 로그인 후 마이에서 계좌 추가/기본지정/수정/삭제 + 만들기 자동채움 확인(폰).
+2. 남은 UX 미세조정 있으면 반영.
+3. 그다음 택1: **구글 로그인 추가**(M4 잔여) 또는 **M5 내역**(내 정산 저장·내역탭 표시·`settlements` 완료기록).
 
 ## 이후 마일스톤
 M5 저장/내역(정산 저장·내역탭·`settlements` 완료기록) → M6 운영(레이트리밋·리전·정리·키롤).

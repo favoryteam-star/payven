@@ -9,6 +9,7 @@ import { Numpad } from '@/components/Numpad'
 import { IcoPlus } from '@/components/icons'
 import { ModeChips } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
+import { AccountSelect, useMyAccounts } from '@/components/AccountSelect'
 
 // 항목(메뉴) 1개. among = 멤버 배열과 같은 길이의 참여 여부(기본 전원).
 type Item = { name: string; amount: number; among: boolean[] }
@@ -23,6 +24,17 @@ export default function ItemizedPage() {
   const [loginPrompt, setLoginPrompt] = useState(false)
   const [autoSubmit, setAutoSubmit] = useState(false)
   const [pending, startTransition] = useTransition()
+
+  // 받을 계좌(내 저장 계좌). null=로딩, []=없음/미로그인. accountId undefined=미선택(기본 자동).
+  const accounts = useMyAccounts()
+  const [accountId, setAccountId] = useState<string | undefined>(undefined)
+  const chosenAccount =
+    accountId === undefined
+      ? accounts?.find((a) => a.isDefault) ?? accounts?.[0]
+      : accountId === ''
+        ? undefined
+        : accounts?.find((a) => a.id === accountId)
+  const accountValue = accountId === undefined ? (chosenAccount?.id ?? '') : accountId
 
   // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원 + 자동 제출(두 번 안 누르게)
   useEffect(() => {
@@ -43,13 +55,14 @@ export default function ItemizedPage() {
     }
   }, [])
 
-  // 복원된 입력값으로 자동 제출(이제 로그인 상태)
+  // 복원된 입력값으로 자동 제출(이제 로그인 상태). 계좌 로딩 완료 후 제출 → 기본 계좌 자동 첨부.
   useEffect(() => {
     if (!autoSubmit) return
+    if (accounts === null) return
     setAutoSubmit(false)
     submit()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSubmit])
+  }, [autoSubmit, accounts])
 
   const goLogin = () => {
     sessionStorage.setItem('payven:draft:items', JSON.stringify({ members, payerIndex, items }))
@@ -132,9 +145,16 @@ export default function ItemizedPage() {
       payload.push({ description: it.name.trim() || undefined, amount: it.amount, participants })
     }
 
+    const account = chosenAccount
+      ? {
+          bankName: chosenAccount.bankName,
+          accountNo: chosenAccount.accountNo,
+          accountHolder: chosenAccount.accountHolder,
+        }
+      : undefined
     startTransition(async () => {
       try {
-        const res = await addItemizedBillAction({ members: filled, payerIndex: payer, items: payload })
+        const res = await addItemizedBillAction({ members: filled, payerIndex: payer, items: payload, account })
         if ('needLogin' in res) {
           setLoginPrompt(true) // 로그인 안내 시트 → 카카오로 계속하기
           return
@@ -214,6 +234,19 @@ export default function ItemizedPage() {
             ))}
           </div>
         </section>
+      )}
+
+      {/* 받을 계좌(내 저장 계좌) */}
+      {accounts && accounts.length > 0 && (
+        <section className="mb-5">
+          <p className="mb-2 text-sm font-medium text-neutral-500">어디로 받을까요?</p>
+          <AccountSelect accounts={accounts} value={accountValue} onChange={setAccountId} />
+        </section>
+      )}
+      {accounts !== null && accounts.length === 0 && (
+        <a href="/my" className="mb-5 block text-sm text-neutral-400 hover:text-brand">
+          + 받을 계좌를 저장해두면 다음부턴 자동으로 채워져요
+        </a>
       )}
 
       {/* 항목 */}

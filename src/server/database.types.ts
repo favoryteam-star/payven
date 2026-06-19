@@ -134,6 +134,7 @@ export type Database = {
       }
       members: {
         Row: {
+          account_holder: string | null
           account_label: string | null
           account_no: string | null
           bank_name: string | null
@@ -143,6 +144,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          account_holder?: string | null
           account_label?: string | null
           account_no?: string | null
           bank_name?: string | null
@@ -152,6 +154,7 @@ export type Database = {
           name: string
         }
         Update: {
+          account_holder?: string | null
           account_label?: string | null
           account_no?: string | null
           bank_name?: string | null
@@ -219,6 +222,39 @@ export type Database = {
           },
         ]
       }
+      user_accounts: {
+        Row: {
+          account_holder: string
+          account_no: string
+          bank_name: string
+          created_at: string
+          id: string
+          is_default: boolean
+          label: string | null
+          user_id: string
+        }
+        Insert: {
+          account_holder: string
+          account_no: string
+          bank_name: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          user_id: string
+        }
+        Update: {
+          account_holder?: string
+          account_no?: string
+          bank_name?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          label?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -226,26 +262,40 @@ export type Database = {
     Functions: {
       add_itemized_bill: {
         Args: {
-          p_slug: string
-          p_name: string
-          p_member_names: string[]
+          p_acct_bank?: string
+          p_acct_holder?: string
+          p_acct_no?: string
           p_items: Json
-          p_owner_id?: string | null
+          p_member_names: string[]
+          p_name: string
+          p_owner_id?: string
+          p_slug: string
         }
         Returns: string
       }
       create_quick_settle: {
         Args: {
-          p_slug: string
-          p_name: string
-          p_member_names: string[]
+          p_acct_bank?: string
+          p_acct_holder?: string
+          p_acct_no?: string
           p_amount: number
+          p_description: string
+          p_member_names: string[]
+          p_name: string
+          p_owner_id?: string
           p_paid_by_index: number
           p_shares: number[]
-          p_description: string
-          p_owner_id?: string | null
+          p_slug: string
         }
         Returns: string
+      }
+      delete_account: {
+        Args: { p_id: string; p_user: string }
+        Returns: undefined
+      }
+      set_default_account: {
+        Args: { p_id: string; p_user: string }
+        Returns: undefined
       }
     }
     Enums: {

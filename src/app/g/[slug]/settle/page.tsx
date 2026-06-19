@@ -8,6 +8,7 @@ import { getGroupBySlug } from '@/server/queries'
 import { ShareButton } from '@/components/ShareButton'
 import { IcoBack, IcoCheck } from '@/components/icons'
 import { CopyButton } from './_components/CopyButton'
+import { TossButton } from './_components/TossButton'
 
 const loadGroup = cache(getGroupBySlug)
 
@@ -30,6 +31,7 @@ export default async function SettlePage({ params }: Params) {
 
   const memberIds = snap.members.map((m) => m.id)
   const nameById = new Map(snap.members.map((m) => [m.id, m.name]))
+  const memberById = new Map(snap.members.map((m) => [m.id, m]))
   const net = netBalances(memberIds, snap.expenses, snap.settlements)
   const transfers = minimizeCashFlow(net)
   const total = snap.expenses.reduce((sum, e) => sum + e.amount, 0)
@@ -68,24 +70,54 @@ export default async function SettlePage({ params }: Params) {
         </div>
       ) : (
         <ul className="flex flex-col gap-2">
-          {transfers.map((t, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-100 bg-white px-4 py-3.5 dark:border-neutral-800 dark:bg-neutral-900"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-[15px]">
-                  <span className="font-semibold">{nameById.get(t.from) ?? '?'}</span>
-                  <span className="mx-1.5 text-neutral-300">→</span>
-                  <span className="font-semibold">{nameById.get(t.to) ?? '?'}</span>
+          {transfers.map((t, i) => {
+            const receiver = memberById.get(t.to)
+            const hasAccount = !!(receiver?.bankName && receiver?.accountNo)
+            return (
+              <li
+                key={i}
+                className="flex flex-col gap-2.5 rounded-2xl border border-neutral-100 bg-white px-4 py-3.5 dark:border-neutral-800 dark:bg-neutral-900"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-[15px]">
+                      <span className="font-semibold">{nameById.get(t.from) ?? '?'}</span>
+                      <span className="mx-1.5 text-neutral-300">→</span>
+                      <span className="font-semibold">{nameById.get(t.to) ?? '?'}</span>
+                    </div>
+                    <div className="num mt-0.5 text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatWon(t.amount)}
+                    </div>
+                  </div>
+                  <CopyButton value={String(t.amount)} label="금액 복사" />
                 </div>
-                <div className="num mt-0.5 text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                  {formatWon(t.amount)}
-                </div>
-              </div>
-              <CopyButton value={String(t.amount)} label="금액 복사" />
-            </li>
-          ))}
+
+                {hasAccount && receiver && (
+                  <div className="flex items-center justify-between gap-2 rounded-xl bg-neutral-50 px-3 py-2 dark:bg-neutral-800/60">
+                    <div className="min-w-0 text-sm">
+                      <div className="truncate">
+                        <span className="text-neutral-500">{receiver.bankName}</span>{' '}
+                        <span className="num">{receiver.accountNo}</span>
+                      </div>
+                      {receiver.accountHolder && (
+                        <div className="truncate text-xs text-neutral-400">
+                          예금주 {receiver.accountHolder}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <CopyButton value={receiver.accountNo!} label="계좌 복사" />
+                      <TossButton
+                        bankName={receiver.bankName!}
+                        accountNo={receiver.accountNo!}
+                        amount={t.amount}
+                      />
+                    </div>
+                  </div>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
 

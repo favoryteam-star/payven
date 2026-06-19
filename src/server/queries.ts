@@ -3,7 +3,12 @@ import { nanoid } from 'nanoid'
 import { getAdminClient } from './db'
 import { equalSplit, splitByWeights } from '@/domain/settle'
 import type { ExpenseRecord, SettlementRecord } from '@/domain/types'
-import type { ItemizedBillInput, QuickSettleInput } from './validation'
+import type {
+  ItemizedBillInput,
+  QuickSettleInput,
+  SaveAccountInput,
+  UpdateAccountInput,
+} from './validation'
 import type { Json } from './database.types'
 
 export interface SnapshotMember {
@@ -11,6 +16,17 @@ export interface SnapshotMember {
   name: string
   bankName: string | null
   accountNo: string | null
+  accountHolder: string | null
+}
+
+/** 로그인 사용자에 저장된 받는 사람 계좌(브라우저에 그대로 전달 가능한 평범한 형태). */
+export interface SavedAccount {
+  id: string
+  bankName: string
+  accountNo: string
+  accountHolder: string
+  label: string | null
+  isDefault: boolean
 }
 
 export interface GroupSnapshot {
@@ -42,6 +58,10 @@ export async function createQuickSettle(
     p_shares: sharesArr,
     p_description: input.description ?? '',
     p_owner_id: ownerId,
+    // 받는 사람(=나, 멤버 0) 계좌(선택). RPC가 멤버 0에 저장.
+    p_acct_bank: input.account?.bankName,
+    p_acct_no: input.account?.accountNo,
+    p_acct_holder: input.account?.accountHolder,
   })
   if (error) throw new Error(`빠른정산 생성 실패: ${error.message}`)
   return { slug }
@@ -85,6 +105,10 @@ export async function addItemizedBill(
     p_member_names: input.members,
     p_items: items,
     p_owner_id: ownerId,
+    // 받는 사람(=나, 멤버 0) 계좌(선택). RPC가 멤버 0에 저장.
+    p_acct_bank: input.account?.bankName,
+    p_acct_no: input.account?.accountNo,
+    p_acct_holder: input.account?.accountHolder,
   })
   if (error) throw new Error(`항목별 정산 생성 실패: ${error.message}`)
   return { slug }
@@ -103,7 +127,11 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
   if (!group) return null
 
   const [membersRes, expensesRes, settlementsRes] = await Promise.all([
-    supa.from('members').select('id, name, bank_name, account_no').eq('group_id', group.id).order('created_at'),
+    supa
+      .from('members')
+      .select('id, name, bank_name, account_no, account_holder')
+      .eq('group_id', group.id)
+      .order('created_at'),
     supa.from('expenses').select('id, amount, paid_by').eq('group_id', group.id),
     supa.from('settlements').select('from_member, to_member, amount').eq('group_id', group.id),
   ])
@@ -141,8 +169,103 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
       name: m.name,
       bankName: m.bank_name,
       accountNo: m.account_no,
+      accountHolder: m.account_holder,
     })),
     expenses: expenseRecords,
     settlements: settlementRecords,
   }
+}
+
+// ── 저장 계좌(받는 사람 계좌) ──────────────────────────────────────
+// 전부 user_id로 스코프 → 한 사용자가 남의 계좌를 건드릴 수 없음(service_role여도 방어).
+// '유저당 기본 1개' 부분 유니크 인덱스(0006) 충돌을 피하려고 기본 전환은 항상 '먼저 끄고 켜기' 순서.
+
+function mapAccount(r: {
+  id: string
+  bank_name: string
+  account_no: string
+  account_holder: string
+  label: string | null
+  is_default: boolean
+}): SavedAccount {
+  return {
+    id: r.id,
+    bankName: r.bank_name,
+    accountNo: r.account_no,
+    accountHolder: r.account_holder,
+    label: r.label,
+    isDefault: r.is_default,
+  }
+}
+
+/** 사용자의 저장 계좌 목록(기본 먼저, 그다음 오래된 순). */
+export async function listUserAccounts(userId: string): Promise<SavedAccount[]> {
+  const supa = getAdminClient()
+  const { data, error } = await supa
+    .from('user_accounts')
+    .select('id, bank_name, account_no, account_holder, label, is_default')
+    .eq('user_id', userId)
+    .order('is_default', { ascending: false })
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(mapAccount)
+}
+
+/** 기본 계좌를 id 하나로 전환. OFF→ON을 한 트랜잭션(RPC)으로 처리 → 제로-기본 창 없음(0008).
+ *  대상이 본인 소유로 존재할 때만 전환(RPC가 검증; 없으면 no-op → 기존 기본 유지). */
+async function setOnlyDefault(userId: string, id: string): Promise<void> {
+  const supa = getAdminClient()
+  const { error } = await supa.rpc('set_default_account', { p_user: userId, p_id: id })
+  if (error) throw new Error(error.message)
+}
+
+/** 계좌 추가. 첫 계좌이거나 makeDefault면 기본으로.
+ *  is_default=false로 삽입(유니크 충돌 원천 차단) 후, 기본이어야 하면 원자적 RPC로 전환. */
+export async function createUserAccount(userId: string, input: SaveAccountInput): Promise<void> {
+  const supa = getAdminClient()
+  const existing = await listUserAccounts(userId)
+  const shouldDefault = input.makeDefault === true || existing.length === 0
+  const { data, error } = await supa
+    .from('user_accounts')
+    .insert({
+      user_id: userId,
+      bank_name: input.bankName,
+      account_no: input.accountNo,
+      account_holder: input.accountHolder,
+      label: input.label?.trim() ? input.label.trim() : null,
+      is_default: false,
+    })
+    .select('id')
+    .single()
+  if (error) throw new Error(error.message)
+  if (shouldDefault) await setOnlyDefault(userId, data.id)
+}
+
+/** 계좌 수정(본인 것만). makeDefault면 기본 전환(원자적). */
+export async function updateUserAccount(userId: string, input: UpdateAccountInput): Promise<void> {
+  const supa = getAdminClient()
+  const { error } = await supa
+    .from('user_accounts')
+    .update({
+      bank_name: input.bankName,
+      account_no: input.accountNo,
+      account_holder: input.accountHolder,
+      label: input.label?.trim() ? input.label.trim() : null,
+    })
+    .eq('user_id', userId)
+    .eq('id', input.id)
+  if (error) throw new Error(error.message)
+  if (input.makeDefault === true) await setOnlyDefault(userId, input.id)
+}
+
+/** 계좌 삭제(본인 것만). 기본을 지웠으면 가장 오래된 남은 계좌를 기본으로 승격 — 한 트랜잭션(RPC, 0008). */
+export async function deleteUserAccount(userId: string, id: string): Promise<void> {
+  const supa = getAdminClient()
+  const { error } = await supa.rpc('delete_account', { p_user: userId, p_id: id })
+  if (error) throw new Error(error.message)
+}
+
+/** 기본 계좌 지정(본인 것만). RPC가 소유·존재 확인 + 원자 전환(없으면 no-op). */
+export async function setDefaultUserAccount(userId: string, id: string): Promise<void> {
+  await setOnlyDefault(userId, id)
 }

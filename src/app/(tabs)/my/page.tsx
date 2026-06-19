@@ -1,11 +1,14 @@
 import { getAuthUser } from '@/server/auth'
+import { listUserAccounts } from '@/server/queries'
 import { IcoUser } from '@/components/icons'
+import { AccountManager } from './_components/AccountManager'
 
 // 마이 탭 — 서버 컴포넌트로 세션을 읽어 로그인 상태 표시. 만들기 게이트는 정산하기 시점(별도).
 export default async function MyPage() {
   const user = await getAuthUser()
 
   if (user) {
+    const accounts = await listUserAccounts(user.id)
     const meta = user.user_metadata ?? {}
     const name =
       (meta.name as string) ||
@@ -25,7 +28,9 @@ export default async function MyPage() {
             <p className="text-sm text-neutral-400">카카오 로그인</p>
           </div>
         </div>
-        <form action="/auth/logout" method="post" className="mt-4">
+        <AccountManager initial={accounts} />
+
+        <form action="/auth/logout" method="post" className="mt-8">
           <button className="w-full rounded-2xl border border-neutral-200 py-3 text-sm font-medium text-neutral-500 transition hover:text-neutral-700 dark:border-neutral-700 dark:hover:text-neutral-300">
             로그아웃
           </button>
