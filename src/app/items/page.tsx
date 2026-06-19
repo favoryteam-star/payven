@@ -2,12 +2,12 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { formatWon } from '@/domain/money'
 import { equalSplit } from '@/domain/settle'
 import { addItemizedBillAction } from '@/app/actions'
 import { Numpad } from '@/components/Numpad'
-import { IcoBack, IcoPlus } from '@/components/icons'
+import { IcoPlus } from '@/components/icons'
+import { ModeChips } from '@/components/ModeChips'
 
 // 항목(메뉴) 1개. among = 멤버 배열과 같은 길이의 참여 여부(기본 전원).
 type Item = { name: string; amount: number; among: boolean[] }
@@ -119,17 +119,12 @@ export default function ItemizedPage() {
 
   return (
     <main className="flex min-h-dvh flex-col px-5 pb-8 pt-5">
-      <Link
-        href="/"
-        className="-ml-1 inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
-      >
-        <IcoBack className="h-5 w-5" /> 홈
-      </Link>
-
-      <header className="mb-6 mt-4">
+      <header className="mb-4">
         <h1 className="text-xl font-bold tracking-tight">항목별로 나누기</h1>
         <p className="mt-0.5 text-sm text-neutral-400">먹은 것만 딱 나눠서 정산</p>
       </header>
+
+      <ModeChips className="mb-6" />
 
       {/* 참여자 */}
       <section className="mb-5">
