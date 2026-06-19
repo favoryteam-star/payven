@@ -15,10 +15,10 @@ export async function GET(req: NextRequest) {
   const callback = new URL('/auth/callback', req.nextUrl.origin)
   callback.searchParams.set('next', next)
 
-  // 카카오는 닉네임만 요청 → 이메일/프로필사진 동의항목 설정 불필요(KOE205 회피). 구글은 기본 스코프.
+  // 카카오: 닉네임 + 이메일 요청(둘 다 동의항목 '사용함'이어야 KOE205 안 남). 구글은 기본 스코프.
   const options =
     provider === 'kakao'
-      ? { redirectTo: callback.toString(), scopes: 'profile_nickname' }
+      ? { redirectTo: callback.toString(), scopes: 'profile_nickname,account_email' }
       : { redirectTo: callback.toString() }
 
   const { data, error } = await supabase.auth.signInWithOAuth({ provider, options })
