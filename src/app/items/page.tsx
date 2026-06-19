@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatWon } from '@/domain/money'
 import { equalSplit } from '@/domain/settle'
@@ -20,6 +20,24 @@ export default function ItemizedPage() {
   const [padItem, setPadItem] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('resume') !== '1') return
+    window.history.replaceState(null, '', '/items')
+    const raw = sessionStorage.getItem('payven:draft:items')
+    if (!raw) return
+    sessionStorage.removeItem('payven:draft:items')
+    try {
+      const d = JSON.parse(raw)
+      if (Array.isArray(d.members)) setMembers(d.members)
+      if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
+      if (Array.isArray(d.items)) setItems(d.items)
+    } catch {
+      /* 손상된 draft 무시 */
+    }
+  }, [])
 
   // 이름이 채워진 멤버의 원본 인덱스 목록
   const filledIdx = members.map((n, i) => (n.trim() ? i : -1)).filter((i) => i >= 0)
@@ -99,12 +117,14 @@ export default function ItemizedPage() {
 
     startTransition(async () => {
       try {
-        const { slug } = await addItemizedBillAction({
-          members: filled,
-          payerIndex: payer,
-          items: payload,
-        })
-        router.push(`/g/${slug}/settle`)
+        const res = await addItemizedBillAction({ members: filled, payerIndex: payer, items: payload })
+        if ('needLogin' in res) {
+          // 만들기는 로그인 필요 → 입력값 보존 후 카카오 로그인, 돌아와 이어서
+          sessionStorage.setItem('payven:draft:items', JSON.stringify({ members, payerIndex, items }))
+          window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/items?resume=1')}`
+          return
+        }
+        router.push(`/g/${res.slug}/settle`)
       } catch (e) {
         setError(e instanceof Error ? e.message : '문제가 생겼어요. 잠시 후 다시 시도해 주세요.')
       }

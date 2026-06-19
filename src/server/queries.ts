@@ -20,8 +20,11 @@ export interface GroupSnapshot {
   settlements: SettlementRecord[]
 }
 
-/** 빠른정산: 임시그룹+멤버+지출+분담을 RPC로 원자적 생성. 분담은 도메인에서 계산. */
-export async function createQuickSettle(input: QuickSettleInput): Promise<{ slug: string }> {
+/** 빠른정산: 임시그룹+멤버+지출+분담을 RPC로 원자적 생성. 분담은 도메인에서 계산. ownerId=로그인 사용자. */
+export async function createQuickSettle(
+  input: QuickSettleInput,
+  ownerId: string,
+): Promise<{ slug: string }> {
   const supa = getAdminClient()
   const slug = nanoid(21)
 
@@ -38,6 +41,7 @@ export async function createQuickSettle(input: QuickSettleInput): Promise<{ slug
     p_paid_by_index: input.payerIndex,
     p_shares: sharesArr,
     p_description: input.description ?? '',
+    p_owner_id: ownerId,
   })
   if (error) throw new Error(`빠른정산 생성 실패: ${error.message}`)
   return { slug }
@@ -47,7 +51,10 @@ export async function createQuickSettle(input: QuickSettleInput): Promise<{ slug
  * 항목별 정산: 영수증(여러 항목)을 RPC로 원자 생성. 항목별 분담은 도메인(splitByWeights)에서 계산.
  * 결제자는 영수증 단위 1명(payerIndex). 각 항목은 참여자만 균등 분담(미참여자 0).
  */
-export async function addItemizedBill(input: ItemizedBillInput): Promise<{ slug: string }> {
+export async function addItemizedBill(
+  input: ItemizedBillInput,
+  ownerId: string,
+): Promise<{ slug: string }> {
   const supa = getAdminClient()
   const slug = nanoid(21)
   const memberCount = input.members.length
@@ -77,6 +84,7 @@ export async function addItemizedBill(input: ItemizedBillInput): Promise<{ slug:
     p_name: name,
     p_member_names: input.members,
     p_items: items,
+    p_owner_id: ownerId,
   })
   if (error) throw new Error(`항목별 정산 생성 실패: ${error.message}`)
   return { slug }

@@ -230,6 +230,7 @@ export type Database = {
           p_name: string
           p_member_names: string[]
           p_items: Json
+          p_owner_id?: string | null
         }
         Returns: string
       }
@@ -242,6 +243,7 @@ export type Database = {
           p_paid_by_index: number
           p_shares: number[]
           p_description: string
+          p_owner_id?: string | null
         }
         Returns: string
       }

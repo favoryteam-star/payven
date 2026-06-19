@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatWon } from '@/domain/money'
 import { quickSettleAction } from '@/app/actions'
@@ -17,6 +17,24 @@ export default function Home() {
   const [payerIndex, setPayerIndex] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('resume') !== '1') return
+    window.history.replaceState(null, '', '/')
+    const raw = sessionStorage.getItem('payven:draft:quick')
+    if (!raw) return
+    sessionStorage.removeItem('payven:draft:quick')
+    try {
+      const d = JSON.parse(raw)
+      if (typeof d.amount === 'number') setAmount(d.amount)
+      if (Array.isArray(d.members)) setMembers(d.members)
+      if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
+    } catch {
+      /* 손상된 draft 무시 */
+    }
+  }, [])
 
   const filled = members.filter((m) => m.trim())
   const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
@@ -39,8 +57,14 @@ export default function Home() {
     const payerIdx = Math.max(0, names.indexOf(payerName))
     startTransition(async () => {
       try {
-        const { slug } = await quickSettleAction({ amount, members: names, payerIndex: payerIdx })
-        router.push(`/g/${slug}/settle`)
+        const res = await quickSettleAction({ amount, members: names, payerIndex: payerIdx })
+        if ('needLogin' in res) {
+          // 만들기는 로그인 필요 → 입력값 보존 후 카카오 로그인, 돌아와 이어서
+          sessionStorage.setItem('payven:draft:quick', JSON.stringify({ amount, members, payerIndex }))
+          window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
+          return
+        }
+        router.push(`/g/${res.slug}/settle`)
       } catch (e) {
         setError(e instanceof Error ? e.message : '문제가 생겼어요. 잠시 후 다시 시도해 주세요.')
       }
