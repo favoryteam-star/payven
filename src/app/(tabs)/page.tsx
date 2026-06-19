@@ -211,7 +211,7 @@ export default function Home() {
       )}
 
       {perPerson > 0 && (
-        <div className="rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
+        <div className="mb-4 rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
           <span className="text-sm text-neutral-500">1인당 </span>
           <span className="num text-lg font-bold text-brand">{formatWon(perPerson)}</span>
         </div>
