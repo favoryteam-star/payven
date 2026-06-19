@@ -1,20 +1,20 @@
 # 페이븐 — 다음 세션 핸드오프 (2026-06-19)
 
-> 새 세션은 이 파일 + 메모리(자동 로드)부터 읽고 이어서 진행. 결정: **색=그린 확정**. **정체성 터치 + M3 항목별 정산 완료(2026-06-19)**. 다음 = **M4 인증** 또는 캐리오버.
+> 새 세션은 이 파일 + 메모리(자동 로드)부터 읽고 이어서 진행. 결정: **색=그린 확정**. **정체성·M3 항목별·M4 카카오 인증+만들기 게이트 완료·라이브(2026-06-19)**. 다음 = **사용자 UX 미세조정(목록 받기) → 구글 로그인 또는 M5 내역**.
 
-## 현재 상태 (M0~M3 완료, 라이브)
+## 현재 상태 (M0~M3 + M4 카카오 인증·만들기 게이트 완료, 라이브)
 - 라이브(공유용): **`payven-hazel.vercel.app`** (에메랄드 그린). `git push origin main` → Vercel 자동배포.
-- IDs: Supabase project `gtssqmibfhkyffvrkhzy`(서울 icn1) / Vercel project `prj_yppD4l9aEleBsPUmZ8iA3yqXGoNm`, team `team_SyQ2rJNlnFscaz3yop6KIfLb`.
-- MCP: **supabase + vercel 둘 다 연결됨**(`.mcp.json`, gitignore). `.env.local`에 URL+service_role 키.
+- IDs: Supabase project `gtssqmibfhkyffvrkhzy`(서울 icn1) / Vercel project `prj_yppD4l9aEleBsPUmZ8iA3yqXGoNm`, team `team_SyQ2rJNlnFscaz3yop6KIfLb`. 카카오 앱 `1491200`(비즈앱).
+- MCP: **supabase + vercel 둘 다 연결됨**(`.mcp.json`, gitignore). `.env.local`+Vercel env에 URL·service_role·**`SUPABASE_ANON_KEY`(서버전용 anon — NEXT_PUBLIC_ 아님)**.
 - 검증: `npm test`(34 green) · `npm run build` · `npm run lint` 통과.
 - 코드 지도:
   - `src/domain/` settle(`equalSplit`/`splitByWeights`·netBalances·minimizeCashFlow)·money·rules·types (정산 엔진, 테스트됨)
-  - `src/server/` db(service_role)·queries(createQuickSettle·addItemizedBill RPC, getGroupBySlug)·ratelimit(graceful)·validation(quickSettle·itemizedBill zod)·database.types
-  - `src/app/(tabs)/` 홈(숫자패드)·내역(빈)·마이(빈) + `g/[slug]/settle` + `items`(항목별 에디터) + `actions.ts`
-  - `src/components/` Logo(BrandMark/Wordmark)·Numpad·BottomNav·ShareButton·icons(무의존)·ServiceWorkerRegister
-  - `supabase/migrations/0001_init.sql`·`0002_create_quick_settle.sql`·`0003_itemized_bill.sql`
-  - PWA: `app/manifest.ts`·`public/sw.js`·`public/icon.svg`
-- 디자인 토큰: `tailwind.config.ts` brand = 그린 `#0FA177`(Tailwind는 rgb로 컴파일). Pretendard, `.num`(tabular-nums), `pb-safe`.
+  - `src/server/` db(service_role)·**`auth.ts`(@supabase/ssr, anon 서버전용·쿠키 세션)**·queries(createQuickSettle·addItemizedBill RPC+owner_id, getGroupBySlug)·ratelimit·validation·database.types
+  - `src/app/(tabs)/` 홈(숫자패드)·내역(빈)·마이(로그인/로그아웃) + `g/[slug]/settle` + `items`(항목별) + `auth/{login,callback,logout}` 라우트 + `actions.ts` + `src/middleware.ts`(세션갱신·`?code`→콜백 안전망)
+  - `src/components/` Logo·ModeChips·LoginSheet·Numpad·BottomNav·ShareButton·icons·ServiceWorkerRegister
+  - `supabase/migrations/0001~0005`(init·quick_settle·itemized·group owner_id·rpc owner_id)
+  - PWA: `app/manifest.ts`·`public/sw.js`(v3, `/auth` 우회)·`public/icon.svg`·`app-icon-{192,256,512}.png`(생성기 `scripts/gen-icon.js`)
+- 디자인 토큰: `tailwind.config.ts` brand = 그린 `#0FA177`. Pretendard, `.num`(tabular-nums), `pb-safe`.
 
 ## ✅ 작업 1 — 정체성 터치 (완료 2026-06-19)
 ÷ → "=" 균형 모티프 전환. 색·구조 그대로.
@@ -40,10 +40,15 @@
 - 노출된 service_role 키·MCP 토큰 **프로덕션 전 롤**
 - repo 문서(CLAUDE/PLAN/ARCHITECTURE/DECISIONS)는 아직 무로그인 V0/V1 기준 → **V2(인증·항목별·PWA)로 갱신 필요**(M4 인증 때 함께)
 
-## ▶ M4 인증 (진행 중)
-- **완료**: 서버 전용 Supabase Auth(`@supabase/ssr`, anon 키 **서버 전용**·httpOnly 쿠키 세션 → 브라우저 Supabase 키 0개 유지). `src/server/auth.ts` + `/auth/login·callback·logout` 라우트 + `middleware.ts`(세션 갱신 + `/auth/` SW우회 + `?code` 안전망). **카카오 로그인 라이브 동작 확인**(나희진, 닉네임+이메일 수집). 마이탭 로그인/로그아웃·프로필. **정산하기 로그인 게이트**(만들기=로그인: 미로그인 시 입력값 sessionStorage 보존→카카오→`?resume=1` 복원, `owner_id` 부여 — 0005 RPC). **보기(공유 링크)는 무로그인 유지.**
-- 카카오 앱: ID `1491200`(비즈앱). 동의항목 닉네임/프사=선택, **이메일=필수**(+"값 없으면 입력 요청" 체크). Supabase Kakao "Allow users without email" ON. **Site URL은 프로덕션 권장**(미들웨어 `?code` 안전망이 폴백 커버).
-- **남음**: 구글 로그인(같은 패턴 — Google Cloud OAuth 클라이언트 + 인앱웹뷰 폴백) · 익명 게스트→`linkIdentity` · (선택) 로그인 시트/구글 버튼.
+## ✅ M4 인증 — 카카오 핵심 완료·라이브 (2026-06-19)
+- 서버 전용 Supabase Auth(`@supabase/ssr`, anon 키 **서버 전용**·httpOnly 쿠키 → 브라우저 Supabase 키 0개). `src/server/auth.ts`(`getAuthUser` graceful) + `/auth/login·callback·logout` + `src/middleware.ts`(세션 갱신·`/auth/` SW우회·`?code`→`/auth/callback` 안전망). **카카오 로그인 라이브 확인**(나희진, 닉네임+이메일 수집). 마이탭 로그인/로그아웃·프로필.
+- **만들기 로그인 게이트(보기는 무로그인)**: 액션이 세션 검증 → 미로그인이면 `needLogin` → 클라가 **안내 시트(`LoginSheet`)** "카카오로 계속하기" → 입력값 sessionStorage 보존 → 카카오 → `?resume=1` 복원 + **자동 제출**(두 번 안 누름) → 정산. `owner_id` 부여(0004 컬럼·0005 RPC, 실DB 검증).
+- 카카오 앱 `1491200`(비즈앱): 동의 닉네임/프사=선택·**이메일=필수**(+"값 없으면 입력 요청"). Supabase Kakao **"Allow users without email" ON**. Site URL은 프로덕션 권장(미들웨어 `?code` 안전망이 폴백 커버).
+- **남음(M4 잔여)**: 구글 로그인(같은 패턴 — Google Cloud OAuth 클라 + 인앱웹뷰 폴백) · 익명 게스트→`linkIdentity`.
+
+## ▶ 다음 세션 시작점
+1. **사용자 UX 미세조정 먼저** — 사용자가 "조금씩 수정할 사항"이 있다고 함(이 세션에서 목록 미수령). 새 세션 시작 시 **무엇을 고칠지 먼저 물어보고** 반영.
+2. 그다음 택1: **구글 로그인 추가**(M4 잔여) 또는 **M5 내역**(내 정산 저장·내역탭 표시·`settlements` 완료기록).
 
 ## 이후 마일스톤
 M5 저장/내역(정산 저장·내역탭·`settlements` 완료기록) → M6 운영(레이트리밋·리전·정리·키롤).
