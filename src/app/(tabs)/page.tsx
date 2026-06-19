@@ -8,6 +8,7 @@ import { Numpad } from '@/components/Numpad'
 import { IcoPlus } from '@/components/icons'
 import { Wordmark } from '@/components/Logo'
 import { ModeChips } from '@/components/ModeChips'
+import { LoginSheet } from '@/components/LoginSheet'
 
 export default function Home() {
   const router = useRouter()
@@ -16,9 +17,11 @@ export default function Home() {
   const [members, setMembers] = useState<string[]>(['나', ''])
   const [payerIndex, setPayerIndex] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [loginPrompt, setLoginPrompt] = useState(false)
+  const [autoSubmit, setAutoSubmit] = useState(false)
   const [pending, startTransition] = useTransition()
 
-  // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원
+  // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원 + 자동 제출(두 번 안 누르게)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('resume') !== '1') return
@@ -31,10 +34,24 @@ export default function Home() {
       if (typeof d.amount === 'number') setAmount(d.amount)
       if (Array.isArray(d.members)) setMembers(d.members)
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
+      setAutoSubmit(true)
     } catch {
       /* 손상된 draft 무시 */
     }
   }, [])
+
+  // 복원된 입력값으로 자동 제출(이제 로그인 상태)
+  useEffect(() => {
+    if (!autoSubmit) return
+    setAutoSubmit(false)
+    submit()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmit])
+
+  const goLogin = () => {
+    sessionStorage.setItem('payven:draft:quick', JSON.stringify({ amount, members, payerIndex }))
+    window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
+  }
 
   const filled = members.filter((m) => m.trim())
   const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
@@ -59,9 +76,7 @@ export default function Home() {
       try {
         const res = await quickSettleAction({ amount, members: names, payerIndex: payerIdx })
         if ('needLogin' in res) {
-          // 만들기는 로그인 필요 → 입력값 보존 후 카카오 로그인, 돌아와 이어서
-          sessionStorage.setItem('payven:draft:quick', JSON.stringify({ amount, members, payerIndex }))
-          window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
+          setLoginPrompt(true) // 로그인 안내 시트 → 카카오로 계속하기
           return
         }
         router.push(`/g/${res.slug}/settle`)
@@ -172,6 +187,7 @@ export default function Home() {
       </button>
 
       <Numpad open={padOpen} amount={amount} onChange={setAmount} onClose={() => setPadOpen(false)} />
+      <LoginSheet open={loginPrompt} onClose={() => setLoginPrompt(false)} onKakao={goLogin} />
     </main>
   )
 }

@@ -40,8 +40,13 @@
 - 노출된 service_role 키·MCP 토큰 **프로덕션 전 롤**
 - repo 문서(CLAUDE/PLAN/ARCHITECTURE/DECISIONS)는 아직 무로그인 V0/V1 기준 → **V2(인증·항목별·PWA)로 갱신 필요**(M4 인증 때 함께)
 
+## ▶ M4 인증 (진행 중)
+- **완료**: 서버 전용 Supabase Auth(`@supabase/ssr`, anon 키 **서버 전용**·httpOnly 쿠키 세션 → 브라우저 Supabase 키 0개 유지). `src/server/auth.ts` + `/auth/login·callback·logout` 라우트 + `middleware.ts`(세션 갱신 + `/auth/` SW우회 + `?code` 안전망). **카카오 로그인 라이브 동작 확인**(나희진, 닉네임+이메일 수집). 마이탭 로그인/로그아웃·프로필. **정산하기 로그인 게이트**(만들기=로그인: 미로그인 시 입력값 sessionStorage 보존→카카오→`?resume=1` 복원, `owner_id` 부여 — 0005 RPC). **보기(공유 링크)는 무로그인 유지.**
+- 카카오 앱: ID `1491200`(비즈앱). 동의항목 닉네임/프사=선택, **이메일=필수**(+"값 없으면 입력 요청" 체크). Supabase Kakao "Allow users without email" ON. **Site URL은 프로덕션 권장**(미들웨어 `?code` 안전망이 폴백 커버).
+- **남음**: 구글 로그인(같은 패턴 — Google Cloud OAuth 클라이언트 + 인앱웹뷰 폴백) · 익명 게스트→`linkIdentity` · (선택) 로그인 시트/구글 버튼.
+
 ## 이후 마일스톤
-M4 인증(카카오+구글+이메일+익명게스트→linkIdentity, owner_id, 마이탭) → M5 저장/내역 → M6 운영(레이트리밋·리전·정리·키롤).
+M5 저장/내역(정산 저장·내역탭·`settlements` 완료기록) → M6 운영(레이트리밋·리전·정리·키롤).
 
 ## 운영 주의
 - Vercel 무료 = **동시 빌드 1개**. 빌드 멈추면 큐 막힘 → Deployments에서 멈춘 배포 **Cancel**(또는 빈 커밋 재트리거).

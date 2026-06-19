@@ -8,6 +8,7 @@ import { addItemizedBillAction } from '@/app/actions'
 import { Numpad } from '@/components/Numpad'
 import { IcoPlus } from '@/components/icons'
 import { ModeChips } from '@/components/ModeChips'
+import { LoginSheet } from '@/components/LoginSheet'
 
 // 항목(메뉴) 1개. among = 멤버 배열과 같은 길이의 참여 여부(기본 전원).
 type Item = { name: string; amount: number; among: boolean[] }
@@ -19,9 +20,11 @@ export default function ItemizedPage() {
   const [items, setItems] = useState<Item[]>([])
   const [padItem, setPadItem] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loginPrompt, setLoginPrompt] = useState(false)
+  const [autoSubmit, setAutoSubmit] = useState(false)
   const [pending, startTransition] = useTransition()
 
-  // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원
+  // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원 + 자동 제출(두 번 안 누르게)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('resume') !== '1') return
@@ -34,10 +37,24 @@ export default function ItemizedPage() {
       if (Array.isArray(d.members)) setMembers(d.members)
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
       if (Array.isArray(d.items)) setItems(d.items)
+      setAutoSubmit(true)
     } catch {
       /* 손상된 draft 무시 */
     }
   }, [])
+
+  // 복원된 입력값으로 자동 제출(이제 로그인 상태)
+  useEffect(() => {
+    if (!autoSubmit) return
+    setAutoSubmit(false)
+    submit()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmit])
+
+  const goLogin = () => {
+    sessionStorage.setItem('payven:draft:items', JSON.stringify({ members, payerIndex, items }))
+    window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/items?resume=1')}`
+  }
 
   // 이름이 채워진 멤버의 원본 인덱스 목록
   const filledIdx = members.map((n, i) => (n.trim() ? i : -1)).filter((i) => i >= 0)
@@ -119,9 +136,7 @@ export default function ItemizedPage() {
       try {
         const res = await addItemizedBillAction({ members: filled, payerIndex: payer, items: payload })
         if ('needLogin' in res) {
-          // 만들기는 로그인 필요 → 입력값 보존 후 카카오 로그인, 돌아와 이어서
-          sessionStorage.setItem('payven:draft:items', JSON.stringify({ members, payerIndex, items }))
-          window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/items?resume=1')}`
+          setLoginPrompt(true) // 로그인 안내 시트 → 카카오로 계속하기
           return
         }
         router.push(`/g/${res.slug}/settle`)
@@ -293,6 +308,7 @@ export default function ItemizedPage() {
         }}
         onClose={() => setPadItem(null)}
       />
+      <LoginSheet open={loginPrompt} onClose={() => setLoginPrompt(false)} onKakao={goLogin} />
     </main>
   )
 }
