@@ -1,6 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="페이븐">
-  <rect width="512" height="512" rx="116" fill="#0FA177"/>
-  <circle cx="256" cy="168" r="30" fill="#fff"/>
-  <rect x="146" y="240" width="220" height="32" rx="16" fill="#fff"/>
-  <circle cx="256" cy="344" r="30" fill="#fff"/>
+  <defs>
+    <linearGradient id="pvbg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#14B488"/>
+      <stop offset="0.55" stop-color="#0FA177"/>
+      <stop offset="1" stop-color="#0B7E5E"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#pvbg)"/>
+  <rect x="148" y="190" width="216" height="46" rx="23" fill="#fff"/>
+  <rect x="148" y="276" width="216" height="46" rx="23" fill="#fff"/>
 </svg>

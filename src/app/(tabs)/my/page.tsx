@@ -9,7 +9,7 @@ export default function MyPage() {
           <IcoUser className="h-8 w-8" />
         </div>
         <div>
-          <p className="text-[15px] font-medium">로그인하고 정산을 저장하세요</p>
+          <p className="text-[15px] font-medium">로그인하면 정산을 저장할 수 있어요</p>
           <p className="mt-1 text-sm text-neutral-400">카카오·구글·이메일로 곧 로그인할 수 있어요</p>
         </div>
         <button

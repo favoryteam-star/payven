@@ -54,6 +54,7 @@ export type Database = {
       expenses: {
         Row: {
           amount: number
+          bill_id: string | null
           created_at: string
           currency: string
           description: string
@@ -64,6 +65,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          bill_id?: string | null
           created_at?: string
           currency?: string
           description: string
@@ -74,6 +76,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          bill_id?: string | null
           created_at?: string
           currency?: string
           description?: string
@@ -218,6 +221,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_itemized_bill: {
+        Args: {
+          p_slug: string
+          p_name: string
+          p_member_names: string[]
+          p_items: Json
+        }
+        Returns: string
+      }
       create_quick_settle: {
         Args: {
           p_slug: string

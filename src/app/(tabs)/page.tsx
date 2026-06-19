@@ -2,10 +2,12 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { formatWon } from '@/domain/money'
 import { quickSettleAction } from '@/app/actions'
 import { Numpad } from '@/components/Numpad'
 import { IcoPlus } from '@/components/icons'
+import { Wordmark } from '@/components/Logo'
 
 export default function Home() {
   const router = useRouter()
@@ -48,8 +50,10 @@ export default function Home() {
   return (
     <main className="flex min-h-[calc(100dvh-5rem)] flex-col px-5 pt-6">
       <header className="mb-6">
-        <h1 className="text-xl font-bold tracking-tight">페이븐</h1>
-        <p className="mt-0.5 text-sm text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
+        <h1>
+          <Wordmark />
+        </h1>
+        <p className="mt-1.5 text-sm text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
       </header>
 
       {/* 금액 — 탭하면 숫자패드 */}
@@ -133,13 +137,21 @@ export default function Home() {
 
       {error && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
 
-      <button
-        onClick={submit}
-        disabled={pending}
-        className="mb-4 mt-auto w-full rounded-2xl bg-brand py-4 text-base font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
-      >
-        {pending ? '정산 중…' : '정산하기'}
-      </button>
+      <div className="mt-auto">
+        <button
+          onClick={submit}
+          disabled={pending}
+          className="w-full rounded-2xl bg-brand py-4 text-base font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+        >
+          {pending ? '정산 중…' : '정산하기'}
+        </button>
+        <Link
+          href="/items"
+          className="mb-4 mt-3 flex items-center justify-center gap-1 text-sm font-medium text-neutral-500 hover:text-brand"
+        >
+          항목별로 나누기 →
+        </Link>
+      </div>
 
       <Numpad open={padOpen} amount={amount} onChange={setAmount} onClose={() => setPadOpen(false)} />
     </main>

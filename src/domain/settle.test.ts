@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { equalSplit, minimizeCashFlow, netBalances } from './settle'
-import type { ExpenseRecord, MemberId, SettlementRecord } from './types'
+import { equalSplit, minimizeCashFlow, netBalances, splitByWeights } from './settle'
+import type { ExpenseRecord, MemberId, SettlementRecord, Weight } from './types'
 
 const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0)
 
@@ -63,6 +63,81 @@ describe('equalSplit', () => {
     const amounts = shares.map((s) => s.amount)
     expect(sum(amounts)).toBe(amount)
     expect(Math.max(...amounts) - Math.min(...amounts)).toBeLessThanOrEqual(1)
+  })
+})
+
+describe('splitByWeights', () => {
+  const w = (memberId: MemberId, weight: number): Weight => ({ memberId, weight })
+
+  it('가중 비례: 100을 1:3 → 25 / 75', () => {
+    const shares = splitByWeights(100, [w('a', 1), w('b', 3)])
+    expect(Object.fromEntries(shares.map((s) => [s.memberId, s.amount]))).toEqual({ a: 25, b: 75 })
+  })
+
+  it('나머지는 분수부(rem) 큰 순으로 1원씩', () => {
+    // a: 7*2/3 = base4 rem2, b: 7*1/3 = base2 rem1 → leftover 1 → a
+    const shares = splitByWeights(7, [w('a', 2), w('b', 1)], 'z')
+    expect(Object.fromEntries(shares.map((s) => [s.memberId, s.amount]))).toEqual({ a: 5, b: 2 })
+    expect(sum(shares.map((s) => s.amount))).toBe(7)
+  })
+
+  it('분수부 동률이면 낸 사람 먼저, 그다음 id 오름차순', () => {
+    // a,b 모두 rem 동률 → paidBy가 가른다
+    const paidB = splitByWeights(8, [w('a', 3), w('b', 3), w('c', 1)], 'b')
+    expect(Object.fromEntries(paidB.map((s) => [s.memberId, s.amount]))).toEqual({ a: 3, b: 4, c: 1 })
+    const paidNone = splitByWeights(8, [w('a', 3), w('b', 3), w('c', 1)], 'z')
+    expect(Object.fromEntries(paidNone.map((s) => [s.memberId, s.amount]))).toEqual({ a: 4, b: 3, c: 1 })
+  })
+
+  it('출력 멤버 = 입력 멤버 그대로(제외 멤버는 애초에 목록에 없음)', () => {
+    const shares = splitByWeights(1000, [w('a', 1), w('c', 2)], 'a')
+    expect(shares.map((s) => s.memberId)).toEqual(['a', 'c'])
+  })
+
+  it('weight 1이면 equalSplit과 항상 동일 (300 runs)', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 1_000_000_000 }),
+        fc.integer({ min: 2, max: 12 }),
+        fc.integer({ min: 0, max: 11 }),
+        (amount, m, payIdx) => {
+          const ids = Array.from({ length: m }, (_, i) => `m${i}`)
+          const paidBy = ids[payIdx % m]
+          const a = equalSplit(amount, ids, paidBy)
+          const b = splitByWeights(amount, ids.map((id) => w(id, 1)), paidBy)
+          expect(b).toEqual(a)
+        },
+      ),
+      { numRuns: 300 },
+    )
+  })
+
+  it('불변식: Σshares == amount, 정수·비음수 (가중 무작위, 300 runs)', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 1_000_000_000 }),
+        fc.array(fc.integer({ min: 1, max: 20 }), { minLength: 1, maxLength: 12 }),
+        fc.integer({ min: 0, max: 11 }),
+        (amount, weightVals, payIdx) => {
+          const weights = weightVals.map((wt, i) => w(`m${i}`, wt))
+          const paidBy = weights[payIdx % weights.length].memberId
+          const shares = splitByWeights(amount, weights, paidBy)
+          expect(sum(shares.map((s) => s.amount))).toBe(amount)
+          for (const s of shares) {
+            expect(Number.isInteger(s.amount)).toBe(true)
+            expect(s.amount).toBeGreaterThanOrEqual(0)
+          }
+        },
+      ),
+      { numRuns: 300 },
+    )
+  })
+
+  it('잘못된 입력은 throw (가중치 <1·비정수·빈 목록·중복)', () => {
+    expect(() => splitByWeights(100, [w('a', 0), w('b', 1)])).toThrow(/가중치/)
+    expect(() => splitByWeights(100, [w('a', 1.5), w('b', 1)])).toThrow(/가중치/)
+    expect(() => splitByWeights(100, [])).toThrow()
+    expect(() => splitByWeights(100, [w('a', 1), w('a', 2)])).toThrow(/중복/)
   })
 })
 

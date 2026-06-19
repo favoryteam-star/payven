@@ -6,7 +6,7 @@ import { formatWon } from '@/domain/money'
 import { minimizeCashFlow, netBalances } from '@/domain/settle'
 import { getGroupBySlug } from '@/server/queries'
 import { ShareButton } from '@/components/ShareButton'
-import { IcoBack } from '@/components/icons'
+import { IcoBack, IcoCheck } from '@/components/icons'
 import { CopyButton } from './_components/CopyButton'
 
 const loadGroup = cache(getGroupBySlug)
@@ -57,9 +57,15 @@ export default async function SettlePage({ params }: Params) {
 
       <h2 className="mb-3 text-sm font-medium text-neutral-500">이렇게 보내면 끝나요</h2>
       {transfers.length === 0 ? (
-        <p className="rounded-2xl border border-neutral-100 bg-neutral-50 px-4 py-10 text-center text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900">
-          정산 끝! 주고받을 게 없어요 🎉
-        </p>
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50 px-6 py-12 text-center dark:border-neutral-800 dark:bg-neutral-900">
+          <span className="pv-pop flex h-16 w-16 items-center justify-center rounded-full bg-brand text-white">
+            <IcoCheck className="h-8 w-8" />
+          </span>
+          <div>
+            <p className="text-lg font-bold tracking-tight">딱 맞췄어요</p>
+            <p className="mt-1 text-sm text-neutral-500">더 보낼 것도, 받을 것도 없어요.</p>
+          </div>
+        </div>
       ) : (
         <ul className="flex flex-col gap-2">
           {transfers.map((t, i) => (

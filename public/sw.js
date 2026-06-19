@@ -1,6 +1,6 @@
 // 페이븐 서비스워커 — 보수적으로: 페이지(네비게이션)는 네트워크 우선(배포 즉시 반영),
 // 정적 에셋만 캐시. 오프라인이면 캐시된 셸로 폴백.
-const CACHE = 'payven-shell-v1'
+const CACHE = 'payven-shell-v2'
 const SHELL = ['/']
 
 self.addEventListener('install', (event) => {

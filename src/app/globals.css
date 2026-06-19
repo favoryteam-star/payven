@@ -29,6 +29,24 @@ body {
   .h-safe-bottom {
     height: env(safe-area-inset-bottom);
   }
+  /* 정산 완료 모먼트 — 강조 한 곳(체크 배지)만 살짝. reduced-motion에선 아래 미디어쿼리가 무력화 */
+  .pv-pop {
+    animation: pv-pop 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
+@keyframes pv-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

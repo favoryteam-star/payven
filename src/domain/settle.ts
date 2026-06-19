@@ -5,49 +5,73 @@ import type {
   SettlementRecord,
   Share,
   Transfer,
+  Weight,
 } from './types'
 
 /**
- * 균등 분할 (largest-remainder).
- * 각자 floor(amount/k), 나머지(amount mod k)원을 1원씩 분배해 합이 정확히 amount가 되게 한다.
- * tie-break: 낸 사람(paidBy)이 참여자면 먼저 흡수 → 그다음 멤버 id 오름차순. 결정적.
- * 예) 10,000 ÷ 3 → 3,334 / 3,333 / 3,333
+ * 가중 분할 (largest-remainder / Hamilton).
+ * 각자 floor(amount·weight/W), 남는 단위는 정수 나머지 numerator(= amount·weight mod W)가 큰 순으로 1원씩.
+ * tie-break(나머지 동률): 낸 사람(paidBy)이 참여자면 먼저 → 멤버 id 오름차순. 결정적, 정수만(부동소수점 0).
+ * weight가 전부 1이면 균등(= equalSplit). 예) 10,000 ÷ 3 → 3,334 / 3,333 / 3,333
+ */
+export function splitByWeights(
+  amount: number,
+  weights: Weight[],
+  paidBy?: MemberId,
+): Share[] {
+  assertWon(amount)
+  if (amount < 0) throw new Error(`금액은 음수가 될 수 없습니다: ${amount}`)
+  const k = weights.length
+  if (k === 0) throw new Error('참여자가 최소 1명 필요합니다')
+  // 한 멤버가 두 개의 분담을 갖는 건 유효한 도메인 결과가 아니다 → fail-fast.
+  if (new Set(weights.map((w) => w.memberId)).size !== k) {
+    throw new Error('참여자 id가 중복되었습니다')
+  }
+  for (const w of weights) {
+    if (!Number.isInteger(w.weight) || w.weight < 1) {
+      throw new Error(`가중치는 1 이상의 정수여야 합니다: ${w.weight}`)
+    }
+  }
+
+  const totalWeight = weights.reduce((s, w) => s + w.weight, 0)
+  // 정수 몫·나머지만으로 비교(부동소수점 금지). 같은 분모 W에서 분수부 비교 = rem 비교.
+  const rows = weights.map((w) => {
+    const product = amount * w.weight
+    return { memberId: w.memberId, base: Math.floor(product / totalWeight), rem: product % totalWeight }
+  })
+  const shares: Share[] = rows.map((r) => ({ memberId: r.memberId, amount: r.base }))
+
+  let leftover = amount - shares.reduce((s, x) => s + x.amount, 0) // 0 .. k-1 단위
+  if (leftover > 0) {
+    const order = [...rows].sort((a, b) => {
+      if (b.rem !== a.rem) return b.rem - a.rem // 분수부 큰 순
+      const aPaid = a.memberId === paidBy ? 0 : 1
+      const bPaid = b.memberId === paidBy ? 0 : 1
+      if (aPaid !== bPaid) return aPaid - bPaid // 낸 사람 먼저
+      return compareId(a.memberId, b.memberId) // 그다음 id 오름차순
+    })
+    const byId = new Map(shares.map((s) => [s.memberId, s]))
+    for (let i = 0; leftover > 0; i++, leftover--) {
+      byId.get(order[i].memberId)!.amount += 1
+    }
+  }
+  return shares
+}
+
+/**
+ * 균등 분할 = 모든 weight가 1인 splitByWeights. 반올림 규칙 단일 출처.
+ * 예) 10,000 ÷ 3 → 3,334 / 3,333 / 3,333 (낸 사람이 나머지 우선 흡수)
  */
 export function equalSplit(
   amount: number,
   participants: MemberId[],
   paidBy?: MemberId,
 ): Share[] {
-  assertWon(amount)
-  if (amount < 0) throw new Error(`금액은 음수가 될 수 없습니다: ${amount}`)
-  const k = participants.length
-  if (k === 0) throw new Error('참여자가 최소 1명 필요합니다')
-  // 한 멤버가 두 개의 분담을 갖는 건 유효한 도메인 결과가 아니다 → fail-fast.
-  // (M1: addExpenseSchema에도 .refine(uniqueness)를 둘 것.)
-  if (new Set(participants).size !== k) {
-    throw new Error('참여자 id가 중복되었습니다')
-  }
-
-  const base = Math.floor(amount / k)
-  const remainder = amount - base * k // 0 .. k-1
-  const shares: Share[] = participants.map((memberId) => ({ memberId, amount: base }))
-
-  if (remainder > 0) {
-    const order = remainderOrder(participants, paidBy)
-    const byId = new Map(shares.map((s) => [s.memberId, s]))
-    for (let i = 0; i < remainder; i++) {
-      byId.get(order[i])!.amount += 1
-    }
-  }
-  return shares
-}
-
-function remainderOrder(participants: MemberId[], paidBy?: MemberId): MemberId[] {
-  const sorted = [...participants].sort(compareId)
-  if (paidBy && participants.includes(paidBy)) {
-    return [paidBy, ...sorted.filter((id) => id !== paidBy)]
-  }
-  return sorted
+  return splitByWeights(
+    amount,
+    participants.map((memberId) => ({ memberId, weight: 1 })),
+    paidBy,
+  )
 }
 
 function compareId(a: MemberId, b: MemberId): number {

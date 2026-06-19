@@ -7,6 +7,11 @@ export interface Share {
   amount: number // 정수 원
 }
 
+export interface Weight {
+  memberId: MemberId
+  weight: number // 정수 ≥ 1 (지분/parts). 전부 1이면 균등.
+}
+
 export interface ExpenseRecord {
   amount: number // 정수 원, 총액
   paidBy: MemberId
