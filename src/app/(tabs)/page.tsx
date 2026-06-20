@@ -3,23 +3,35 @@
 import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatWon } from '@/domain/money'
-import { quickSettleAction } from '@/app/actions'
+import { equalSplit } from '@/domain/settle'
+import { addItemizedBillAction, quickSettleAction } from '@/app/actions'
 import { Numpad } from '@/components/Numpad'
 import { IcoPlus } from '@/components/icons'
 import { Wordmark } from '@/components/Logo'
-import { ModeChips } from '@/components/ModeChips'
+import { ModeChips, type SettleMode } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
 import { AccountField, EMPTY_INLINE, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 
+// 항목(메뉴) 1개. among = 멤버 배열과 같은 길이의 참여 여부(기본 전원).
+type Item = { name: string; amount: number; among: boolean[] }
+
+// 1/N과 항목별을 한 페이지에서 토글로(페이지 이동 X). 헤더·하단탭·공유입력(멤버·낸사람·단위·계좌)은
+// 그대로 두고, 맨 위 입력칸만 바뀐다: 1/N = 금액, 항목별 = 항목.
 export default function Home() {
   const router = useRouter()
-  const [amount, setAmount] = useState(0)
-  const [padOpen, setPadOpen] = useState(false)
+  const [mode, setMode] = useState<SettleMode>('quick')
+  // 공유 입력
   const [members, setMembers] = useState<string[]>(['나', ''])
   const [payerIndex, setPayerIndex] = useState(0)
-  // 반올림 단위(1=안 함) + 남는 금액 받을 사람(members 인덱스, null=미선택). 단위 바꾸면 다시 고르게.
-  const [unit, setUnit] = useState(1)
-  const [absorberIndex, setAbsorberIndex] = useState<number | null>(null)
+  const [unit, setUnit] = useState(1) // 반올림 단위(1=안 함)
+  const [absorberIndex, setAbsorberIndex] = useState<number | null>(null) // 남는 금액 받을 사람(members 인덱스)
+  // 1/N 전용
+  const [amount, setAmount] = useState(0)
+  const [padOpen, setPadOpen] = useState(false)
+  // 항목별 전용
+  const [items, setItems] = useState<Item[]>([])
+  const [padItem, setPadItem] = useState<number | null>(null)
+  // 공통
   const [error, setError] = useState<string | null>(null)
   const [loginPrompt, setLoginPrompt] = useState(false)
   const [autoSubmit, setAutoSubmit] = useState(false)
@@ -44,21 +56,18 @@ export default function Home() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('resume') === '1') window.history.replaceState(null, '', '/')
-    // 항목별 정산 중이었으면(폴백 복귀가 홈으로 떨어져도) 항목별 페이지에서 복원되게 그쪽으로 보냄.
-    if (sessionStorage.getItem('payven:draft:items')) {
-      window.location.replace('/items')
-      return
-    }
-    const raw = sessionStorage.getItem('payven:draft:quick')
+    const raw = sessionStorage.getItem('payven:draft:create')
     if (!raw) return
-    sessionStorage.removeItem('payven:draft:quick')
+    sessionStorage.removeItem('payven:draft:create')
     try {
       const d = JSON.parse(raw)
+      if (d.mode === 'quick' || d.mode === 'items') setMode(d.mode)
       if (typeof d.amount === 'number') setAmount(d.amount)
       if (Array.isArray(d.members)) setMembers(d.members)
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
       if (typeof d.unit === 'number') setUnit(d.unit)
       if (typeof d.absorberIndex === 'number') setAbsorberIndex(d.absorberIndex)
+      if (Array.isArray(d.items)) setItems(d.items)
       if (d.acct && typeof d.acct === 'object') setAcct(d.acct)
       setAutoSubmit(true)
     } catch {
@@ -84,25 +93,59 @@ export default function Home() {
 
   const goLogin = () => {
     sessionStorage.setItem(
-      'payven:draft:quick',
-      JSON.stringify({ amount, members, payerIndex, unit, absorberIndex, acct }),
+      'payven:draft:create',
+      JSON.stringify({ mode, amount, members, payerIndex, unit, absorberIndex, items, acct }),
     )
     window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
   }
 
+  // ── 파생값 ──
   const filled = members.filter((m) => m.trim())
-  const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
-  // 분담 미리보기(균등이라 base는 전원 동일). 단위로 안 떨어지면 남는 금액(leftover)은 고른 사람이 흡수.
-  // unit=1(안 함)도 안 나눠떨어지면 leftover(1~2원)가 생기고, 똑같이 받을 사람을 고른다.
-  const roundBase = perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
-  const leftover = perPerson > 0 ? amount - roundBase * filled.length : 0
+  const filledIdx = members.map((n, i) => (n.trim() ? i : -1)).filter((i) => i >= 0)
+  // 결제자가 비워졌거나 범위를 벗어나면 첫 채워진 멤버로 — 표시·계산·제출의 단일 출처.
+  const effectivePayer = filledIdx.includes(payerIndex) ? payerIndex : (filledIdx[0] ?? 0)
 
+  // 1/N: 균등이라 base는 전원 동일. 단위로 안 떨어지면 남는 금액은 고른 사람이 흡수(안 함의 1~2원 포함).
+  const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
+  const quickBase = perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
+  const quickLeftover = perPerson > 0 ? amount - quickBase * filled.length : 0
+
+  // 항목별: 인별 합계(단위·흡수자 반영, 미리보기=제출과 동일 도메인 호출) + 남는 금액 합.
+  const total = items.reduce((s, it) => s + (it.amount > 0 ? it.amount : 0), 0)
+  const splitOpts = {
+    paidBy: String(effectivePayer),
+    unit,
+    absorber: absorberIndex !== null ? String(absorberIndex) : undefined,
+  }
+  const tabs = filledIdx.map(() => 0)
+  let itemsLeftover = 0
+  for (const it of items) {
+    if (it.amount <= 0) continue
+    const parts = filledIdx.filter((fi) => it.among[fi])
+    if (parts.length === 0) continue
+    const shares = equalSplit(it.amount, parts.map(String), splitOpts)
+    const byId = new Map(shares.map((s) => [s.memberId, s.amount]))
+    for (const oi of parts) tabs[filledIdx.indexOf(oi)] += byId.get(String(oi)) ?? 0
+    itemsLeftover += it.amount - Math.floor(it.amount / (parts.length * unit)) * unit * parts.length
+  }
+
+  // 모드 공통: 남는 금액 + 단위 섹션 노출 여부.
+  const leftover = mode === 'quick' ? quickLeftover : itemsLeftover
+  const showUnit = mode === 'quick' ? perPerson > 0 : filledIdx.length >= 2 && total > 0
+
+  // ── 멤버 ──
   const setMember = (i: number, v: string) =>
     setMembers((p) => p.map((m, idx) => (idx === i ? v : m)))
-  const addMember = () => setMembers((p) => [...p, ''])
+  const addMember = () => {
+    setMembers((p) => [...p, ''])
+    setItems((p) => p.map((it) => ({ ...it, among: [...it.among, true] })))
+  }
   const removeMember = (i: number) => {
-    setMembers((p) => (p.length <= 2 ? p : p.filter((_, idx) => idx !== i)))
+    if (members.length <= 2) return
+    setMembers((p) => p.filter((_, idx) => idx !== i))
+    setItems((p) => p.map((it) => ({ ...it, among: it.among.filter((_, idx) => idx !== i) })))
     setPayerIndex((p) => (p === i ? 0 : p > i ? p - 1 : p))
+    setAbsorberIndex((p) => (p === null ? null : p === i ? null : p > i ? p - 1 : p))
   }
   // 엔터 → 빈 칸이면 무시, 마지막 칸이면 새 사람 추가, 그다음 칸으로 포커스 이동
   const onMemberKeyDown = (e: KeyboardEvent<HTMLInputElement>, i: number) => {
@@ -113,38 +156,88 @@ export default function Home() {
     setFocusMember(i + 1)
   }
 
+  // ── 항목 ──
+  const addItem = () =>
+    setItems((p) => {
+      // 새 항목은 직전 항목의 참여자를 상속(없으면 전원)
+      const base = p.length ? [...p[p.length - 1].among] : members.map(() => true)
+      while (base.length < members.length) base.push(true)
+      return [...p, { name: '', amount: 0, among: base.slice(0, members.length) }]
+    })
+  const removeItem = (idx: number) => {
+    setItems((p) => p.filter((_, i) => i !== idx))
+    setPadItem((p) => (p === null ? null : p === idx ? null : p > idx ? p - 1 : p))
+  }
+  const setItemName = (idx: number, v: string) =>
+    setItems((p) => p.map((it, i) => (i === idx ? { ...it, name: v } : it)))
+  const setItemAmount = (idx: number, amt: number) =>
+    setItems((p) => p.map((it, i) => (i === idx ? { ...it, amount: amt } : it)))
+  const toggleAmong = (idx: number, mi: number) =>
+    setItems((p) =>
+      p.map((it, i) => {
+        if (i !== idx) return it
+        const among = it.among.map((b, k) => (k === mi ? !b : b))
+        return filledIdx.some((fi) => among[fi]) ? { ...it, among } : it // 최소 1명 유지
+      }),
+    )
+
   function submit() {
     setError(null)
-    const trimmed = members.map((m) => m.trim())
-    const names = trimmed.filter(Boolean)
-    if (amount <= 0) return setError('금액을 입력해 주세요')
+    const names = filledIdx.map((i) => members[i].trim())
     if (names.length < 2) return setError('최소 2명이 필요해요')
-    const payerName = trimmed[payerIndex] || names[0]
-    const payerIdx = Math.max(0, names.indexOf(payerName))
-    // 안 나눠떨어지면(단위 무관, 안 함의 1~2원 포함) 남는 금액 받을 사람을 골라야(매번 직접 선택).
-    const base = Math.floor(amount / (names.length * unit)) * unit
-    const left = amount - base * names.length
+
+    // 모드별 메인 입력 검증 + 항목별 payload 구성
+    const payload: { description?: string; amount: number; participants: number[] }[] = []
+    if (mode === 'quick') {
+      if (amount <= 0) return setError('금액을 입력해 주세요')
+    } else {
+      const realItems = items.filter((it) => it.amount > 0)
+      if (realItems.length === 0) return setError('항목을 1개 이상 추가해 주세요')
+      for (const it of realItems) {
+        const participants = filledIdx
+          .map((oi, pos) => ({ oi, pos }))
+          .filter((x) => it.among[x.oi])
+          .map((x) => x.pos)
+        if (participants.length === 0) return setError('모든 항목에 참여자가 1명 이상 필요해요')
+        payload.push({ description: it.name.trim() || undefined, amount: it.amount, participants })
+      }
+    }
+
+    const payer = Math.max(0, filledIdx.indexOf(effectivePayer))
+    // 안 나눠떨어지면(단위 무관, 안 함의 1~2원 포함) 남는 금액 받을 사람을 골라야. filled 위치로 변환.
     let absorberIdx: number | undefined
-    if (left > 0) {
+    if (leftover > 0) {
       if (absorberIndex === null) return setError('남은 금액 받을 사람을 골라주세요')
-      const absName = trimmed[absorberIndex]
-      const pos = absName ? names.indexOf(absName) : -1
+      const pos = filledIdx.indexOf(absorberIndex)
       if (pos < 0) return setError('남은 금액 받을 사람을 다시 골라주세요')
       absorberIdx = pos
     }
+
     const resolved = resolveAccount(accounts, accountId, acct)
     if (resolved.error) return setError(resolved.error)
+
     startTransition(async () => {
       try {
-        const res = await quickSettleAction({
-          amount,
-          members: names,
-          payerIndex: payerIdx,
-          unit,
-          absorberIndex: absorberIdx,
-          account: resolved.account,
-          saveAccount: resolved.saveAccount,
-        })
+        const res =
+          mode === 'quick'
+            ? await quickSettleAction({
+                amount,
+                members: names,
+                payerIndex: payer,
+                unit,
+                absorberIndex: absorberIdx,
+                account: resolved.account,
+                saveAccount: resolved.saveAccount,
+              })
+            : await addItemizedBillAction({
+                members: names,
+                payerIndex: payer,
+                unit,
+                absorberIndex: absorberIdx,
+                items: payload,
+                account: resolved.account,
+                saveAccount: resolved.saveAccount,
+              })
         if ('needLogin' in res) {
           setLoginPrompt(true) // 로그인 안내 시트 → 카카오로 계속하기
           return
@@ -156,6 +249,12 @@ export default function Home() {
     })
   }
 
+  const partChip = (active: boolean) =>
+    'rounded-full px-3 py-1.5 text-sm font-medium transition ' +
+    (active
+      ? 'bg-brand text-white'
+      : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500')
+
   return (
     <main className="flex min-h-[calc(100dvh-5rem)] flex-col px-5 pt-6">
       <header className="mb-4">
@@ -165,24 +264,79 @@ export default function Home() {
         <p className="mt-1.5 text-sm text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
       </header>
 
-      <ModeChips className="mb-6" />
+      <ModeChips value={mode} onChange={setMode} className="mb-6" />
 
-      {/* 금액 — 탭하면 숫자패드 */}
-      <button
-        onClick={() => setPadOpen(true)}
-        className="mb-6 w-full rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-5 text-left dark:border-neutral-800 dark:bg-neutral-900"
-      >
-        <span className="text-sm text-neutral-400">얼마 나왔어요?</span>
-        <div className="num mt-1 text-4xl font-bold tracking-tight">
-          {amount > 0 ? (
-            formatWon(amount)
-          ) : (
-            <span className="text-neutral-300 dark:text-neutral-600">0원</span>
-          )}
-        </div>
-      </button>
+      {/* 맨 위 입력 — 1/N은 금액, 항목별은 항목(나머지 섹션은 공유) */}
+      {mode === 'quick' ? (
+        <button
+          onClick={() => setPadOpen(true)}
+          className="mb-6 w-full rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-5 text-left dark:border-neutral-800 dark:bg-neutral-900"
+        >
+          <span className="text-sm text-neutral-400">얼마 나왔어요?</span>
+          <div className="num mt-1 text-4xl font-bold tracking-tight">
+            {amount > 0 ? (
+              formatWon(amount)
+            ) : (
+              <span className="text-neutral-300 dark:text-neutral-600">0원</span>
+            )}
+          </div>
+        </button>
+      ) : (
+        <section className="mb-5">
+          <p className="mb-2 text-sm font-medium text-neutral-500">뭘 먹었어요?</p>
+          <div className="flex flex-col gap-3">
+            {items.map((it, idx) => (
+              <div
+                key={idx}
+                className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900"
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    value={it.name}
+                    placeholder={`항목 ${idx + 1}`}
+                    onChange={(e) => setItemName(idx, e.target.value)}
+                    className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950"
+                  />
+                  <button
+                    onClick={() => setPadItem(idx)}
+                    className="num shrink-0 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] font-semibold tabular-nums dark:border-neutral-700 dark:bg-neutral-950"
+                  >
+                    {it.amount > 0 ? (
+                      formatWon(it.amount)
+                    ) : (
+                      <span className="text-neutral-300 dark:text-neutral-600">금액</span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => removeItem(idx)}
+                    aria-label="항목 삭제"
+                    className="shrink-0 px-1 text-neutral-300 hover:text-neutral-500"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {filledIdx.length >= 1 && (
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {filledIdx.map((fi) => (
+                      <button key={fi} onClick={() => toggleAmong(idx, fi)} className={partChip(it.among[fi])}>
+                        {members[fi].trim()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={addItem}
+            className="mt-3 flex w-full items-center justify-center gap-1 rounded-2xl border border-dashed border-neutral-300 py-3 text-sm font-medium text-neutral-500 hover:border-brand hover:text-brand dark:border-neutral-700"
+          >
+            <IcoPlus className="h-4 w-4" /> 항목 추가
+          </button>
+        </section>
+      )}
 
-      {/* 참여자 */}
+      {/* 참여자 (공유) */}
       <section className="mb-5">
         <p className="mb-2 text-sm font-medium text-neutral-500">누구랑 나눠요?</p>
         <div className="flex flex-col gap-2">
@@ -219,33 +373,31 @@ export default function Home() {
         </button>
       </section>
 
-      {/* 낸 사람 */}
-      {filled.length >= 1 && (
+      {/* 낸 사람 (공유) */}
+      {filledIdx.length >= 1 && (
         <section className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">누가 냈어요?</p>
           <div className="flex flex-wrap gap-2">
-            {members.map((m, i) =>
-              m.trim() ? (
-                <button
-                  key={i}
-                  onClick={() => setPayerIndex(i)}
-                  className={
-                    'rounded-full px-4 py-2 text-sm font-medium transition ' +
-                    (payerIndex === i
-                      ? 'bg-brand text-white'
-                      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
-                  }
-                >
-                  {m.trim()}
-                </button>
-              ) : null,
-            )}
+            {filledIdx.map((i) => (
+              <button
+                key={i}
+                onClick={() => setPayerIndex(i)}
+                className={
+                  'rounded-full px-4 py-2 text-sm font-medium transition ' +
+                  (effectivePayer === i
+                    ? 'bg-brand text-white'
+                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                }
+              >
+                {members[i].trim()}
+              </button>
+            ))}
           </div>
         </section>
       )}
 
-      {/* 금액 단위로 맞추기(선택) — 친구들이 3,333 대신 3,300 같은 깔끔한 금액을 보내게. 남는 건 고른 사람이. */}
-      {perPerson > 0 && (
+      {/* 금액 단위로 맞추기 (공유) — 친구들이 3,333 대신 3,300 같은 깔끔한 금액을 보내게. 남는 건 고른 사람이. */}
+      {showUnit && (
         <section className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">
             금액 단위로 맞추기 <span className="font-normal text-neutral-400">(선택)</span>
@@ -271,40 +423,42 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 단위로 안 떨어지면(안 함의 1~2원 포함) 남는 금액 받을 사람을 직접 고른다(자동 기본값 없음). */}
+          {/* 안 떨어지면(안 함의 1~2원 포함) 남는 금액 받을 사람을 직접 고른다(자동 기본값 없음). */}
           {leftover > 0 && (
             <div className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
               <p className="text-sm text-neutral-600 dark:text-neutral-300">
-                각자 <span className="num font-semibold text-brand">{formatWon(roundBase)}</span> · 남은{' '}
-                <span className="num font-semibold">{formatWon(leftover)}</span> 누가 낼까요?
+                {mode === 'quick' && (
+                  <>
+                    각자 <span className="num font-semibold text-brand">{formatWon(quickBase)}</span> ·{' '}
+                  </>
+                )}
+                남은 <span className="num font-semibold">{formatWon(leftover)}</span> 누가 낼까요?
               </p>
               <div className="mt-2.5 flex flex-wrap gap-2">
-                {members.map((m, i) =>
-                  m.trim() ? (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setAbsorberIndex(i)
-                        setError(null)
-                      }}
-                      className={
-                        'rounded-full px-4 py-2 text-sm font-medium transition ' +
-                        (absorberIndex === i
-                          ? 'bg-brand text-white'
-                          : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
-                      }
-                    >
-                      {m.trim()}
-                    </button>
-                  ) : null,
-                )}
+                {filledIdx.map((fi) => (
+                  <button
+                    key={fi}
+                    onClick={() => {
+                      setAbsorberIndex(fi)
+                      setError(null)
+                    }}
+                    className={
+                      'rounded-full px-4 py-2 text-sm font-medium transition ' +
+                      (absorberIndex === fi
+                        ? 'bg-brand text-white'
+                        : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                    }
+                  >
+                    {members[fi].trim()}
+                  </button>
+                ))}
               </div>
             </div>
           )}
         </section>
       )}
 
-      {/* 받을 계좌. 저장계좌 있으면 칩, 없으면 인라인 입력(선택). 정산 결과에서 친구들이 이 계좌로 보냄. */}
+      {/* 받을 계좌 (공유). 저장계좌 있으면 칩, 없으면 인라인 입력(선택). */}
       {accounts !== null && (
         <section className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">
@@ -325,12 +479,33 @@ export default function Home() {
         </section>
       )}
 
-      {perPerson > 0 && leftover === 0 && (
-        <div className="mb-4 rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
-          <span className="text-sm text-neutral-500">1인당 </span>
-          <span className="num text-lg font-bold text-brand">{formatWon(roundBase)}</span>
-        </div>
-      )}
+      {/* 미리보기 — 1/N은 1인당(딱 떨어질 때), 항목별은 합계+인별 */}
+      {mode === 'quick'
+        ? perPerson > 0 &&
+          leftover === 0 && (
+            <div className="mb-4 rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
+              <span className="text-sm text-neutral-500">1인당 </span>
+              <span className="num text-lg font-bold text-brand">{formatWon(quickBase)}</span>
+            </div>
+          )
+        : total > 0 && (
+            <section className="mb-5 rounded-2xl bg-brand-50 px-4 py-3 dark:bg-brand-600/15">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-medium text-neutral-500">합계</span>
+                <span className="num text-lg font-bold text-brand">{formatWon(total)}</span>
+              </div>
+              {tabs.some((t) => t > 0) && (
+                <div className="mt-2 flex flex-col gap-1 border-t border-brand-100 pt-2 dark:border-brand-600/20">
+                  {filledIdx.map((fi, pos) => (
+                    <div key={fi} className="flex items-baseline justify-between text-sm">
+                      <span className="text-neutral-600 dark:text-neutral-300">{members[fi].trim()}</span>
+                      <span className="num font-semibold">{formatWon(tabs[pos])}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
       {error && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
 
@@ -342,7 +517,17 @@ export default function Home() {
         {pending ? '정산 중…' : '정산하기'}
       </button>
 
+      {/* 1/N 금액 숫자패드 */}
       <Numpad open={padOpen} amount={amount} onChange={setAmount} onClose={() => setPadOpen(false)} />
+      {/* 항목별 금액 숫자패드 */}
+      <Numpad
+        open={padItem !== null}
+        amount={padItem !== null ? (items[padItem]?.amount ?? 0) : 0}
+        onChange={(amt) => {
+          if (padItem !== null) setItemAmount(padItem, amt)
+        }}
+        onClose={() => setPadItem(null)}
+      />
       <LoginSheet open={loginPrompt} onClose={() => setLoginPrompt(false)} onKakao={goLogin} />
     </main>
   )
