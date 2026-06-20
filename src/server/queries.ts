@@ -30,7 +30,7 @@ export interface SavedAccount {
 }
 
 export interface GroupSnapshot {
-  group: { id: string; slug: string; name: string; kind: string }
+  group: { id: string; slug: string; name: string; kind: string; createdAt: string }
   members: SnapshotMember[]
   expenses: ExpenseRecord[]
   settlements: SettlementRecord[]
@@ -120,7 +120,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
 
   const { data: group, error: gErr } = await supa
     .from('groups')
-    .select('id, slug, name, kind')
+    .select('id, slug, name, kind, created_at')
     .eq('slug', slug)
     .maybeSingle()
   if (gErr) throw new Error(gErr.message)
@@ -163,7 +163,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
   }))
 
   return {
-    group,
+    group: { id: group.id, slug: group.slug, name: group.name, kind: group.kind, createdAt: group.created_at },
     members: (membersRes.data ?? []).map((m) => ({
       id: m.id,
       name: m.name,

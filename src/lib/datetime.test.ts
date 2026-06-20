@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatRelativeDay } from './datetime'
+import { formatMonthDay, formatRelativeDay } from './datetime'
 
 describe('formatRelativeDay', () => {
   // 기준 시각: 2026-06-20T05:00:00Z = KST 2026-06-20 14:00
@@ -33,5 +33,16 @@ describe('formatRelativeDay', () => {
   it('미래·해석불가 입력 방어', () => {
     expect(formatRelativeDay('2026-06-25T00:00:00Z', now)).toBe('오늘') // 미래는 오늘로
     expect(formatRelativeDay('not-a-date', now)).toBe('')
+  })
+})
+
+describe('formatMonthDay', () => {
+  it('KST 월/일로 표시', () => {
+    expect(formatMonthDay('2026-06-20T01:00:00Z')).toBe('6월 20일') // KST 10:00
+    expect(formatMonthDay('2026-06-19T20:00:00Z')).toBe('6월 20일') // KST 익일 05:00 보정
+    expect(formatMonthDay('2026-01-09T20:00:00Z')).toBe('1월 10일')
+  })
+  it('해석불가 입력은 빈 문자열', () => {
+    expect(formatMonthDay('nope')).toBe('')
   })
 })

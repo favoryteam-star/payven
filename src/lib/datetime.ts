@@ -27,3 +27,11 @@ export function formatRelativeDay(iso: string, now: Date): string {
   const da = String(d.getUTCDate()).padStart(2, '0')
   return `${y}.${mo}.${da}`
 }
+
+/** 맥락 표시용 한국식 월/일(KST). 예: "6월 20일". 해석 불가는 빈 문자열. */
+export function formatMonthDay(iso: string): string {
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return ''
+  const d = new Date(t + KST_OFFSET_MS)
+  return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`
+}
