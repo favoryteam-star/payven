@@ -83,3 +83,14 @@
 - **검증:** RPC가 계좌를 멤버 0에만 부착(실DB e2e). `user_accounts` RLS on·정책 0·anon/authenticated REVOKE·기본 유니크 인덱스 존재 확인. 정산 결과 화면 무로그인 렌더(은행/계좌/예금주+복사+토스) 프리뷰 확인. **적대적 리뷰(32 에이전트)** 후 확정 수정 반영. build·lint·test(34) green.
 - **불변식 하드닝(0008, 리뷰 반영):** 기본 1개 전환을 처음엔 OFF/ON 별도 호출로 했더니 동시 요청 시 '기본 0개' 창·유니크 충돌 가능 → **원자적 RPC 2개**로 교체: `set_default_account(p_user,p_id)`(한 트랜잭션 OFF→ON, 대상 미존재면 no-op로 제로-기본 방지)·`delete_account(p_user,p_id)`(삭제+가장 오래된 남은 계좌 승격, `created_at,id` 결정적). createUserAccount는 `is_default=false`로 삽입 후 RPC 전환(삽입 유니크 충돌 원천 차단). 실DB로 전환·삭제승격·미존재 no-op·항상 dc=1 검증. 계좌번호 검증은 문자열 길이가 아니라 **숫자 자릿수(6~20)**로(‘12-3’ 통과 방지).
 - **상태:** 확정. `0006_user_accounts.sql`(테이블+`account_holder`) + `0007_rpc_member_account.sql`(두 RPC 계좌 파라미터) + `0008_account_default_rpc.sql`(원자적 기본전환·삭제승격). 잔여: 만들기 자동채움/마이 CRUD는 로그인(카카오) 수동 스모크 필요.
+
+### ADR-014 — M5 내역(내가 만든 정산 목록): owner_id 재사용, 집계는 3쿼리 ★
+- **맥락:** 내역탭이 빈 자리표시자("(곧)")였음. M4에서 `groups.owner_id`(로그인 생성 시 부여)가 이미 있으니 **별도 저장 테이블 없이** "내 정산"을 그걸로 조회 = "만들면 이미 저장됨". 빠른정산은 전부 이름이 "빠른정산"이라 이름만으론 구분 불가.
+- **결정:**
+  1. **`listGroupsByOwner(ownerId)`**(읽기, server/queries): `groups where owner_id=… order by created_at desc` → id로 `members`/`expenses` 한 번씩 `in()` 조회 → JS 집계(인원수·총액). **N+1 없이 3쿼리, 새 마이그레이션·RPC 없음.** 반환 `SettlementSummary{slug,name,kind,createdAt,memberCount,total}`.
+  2. **내역탭 = Server Component**([[ADR-006]]: 읽기는 액션 아님): `getAuthUser` → 미로그인이면 카카오 CTA(`next=/history`) / 로그인+0건이면 빈상태 / 목록이면 카드(이름·`N명 · 상대날짜`·총액, 탭하면 settle 페이지). 무로그인 보기 유지(브라우저 키 0개 모델 불변).
+  3. **상대 날짜는 KST 고정(+9, DST 없음)** 순수 유틸 `lib/datetime.formatRelativeDay(iso, now)`(오늘/어제/N일 전/`YYYY.MM.DD`). Vercel은 UTC라 캘린더일 보정 필수 → `now`를 서버에서 주입해 결정적. 단위테스트로 KST 경계 핀(UTC로는 같은 날이지만 KST로는 어제인 케이스).
+- **근거:** owner_id 재사용이 가장 작은 변경(저장은 M4가 이미 함). 개인 내역(수십 건)이라 3쿼리 집계로 충분 — RPC/뷰는 과설계. 공개 **write가 아니라 읽기**라 `withRateLimit`/zod 불필요(하드룰 6은 write 전용).
+- **범위 밖(후속 증분 B):** per-transfer **송금완료 기록**(기존 `settlements` 테이블 = "보냈어요" → `netBalances`가 차감, "완료" 배지) — 이건 **공개 링크의 write**라 `withRateLimit`+zod 필요, 별도 증분. 그룹(`kind='group'`) 지속/이름 편집도 후속.
+- **검증:** test 47 green(+`datetime` 6, KST 경계 포함)·build(`/history` ƒ Dynamic = server-only 누수 0)·lint. 실DB로 owner 스코프(나희진 4건 반환·null-owner 제외)·집계(인원/총액) 대조. 프리뷰로 미로그인 CTA 렌더(콘솔·서버 에러 0, 카카오 링크 `next=/history`). 로그인 목록 렌더는 OAuth라 폰 스모크 잔여.
+- **상태:** 확정(증분 A=목록). 마이그레이션 없음. 잔여: 송금완료 기록(증분 B)·로그인 목록 폰 스모크.

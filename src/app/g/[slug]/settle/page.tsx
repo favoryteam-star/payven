@@ -125,7 +125,7 @@ export default async function SettlePage({ params }: Params) {
       <div className="mt-auto pt-8">
         <ShareButton title={`${snap.group.name} 정산`} />
         <p className="mt-3 text-center text-xs text-neutral-400">
-          로그인하면 이 정산을 내역에 저장할 수 있어요 (곧)
+          로그인하고 만든 정산은 내역에 자동 저장돼요
         </p>
       </div>
     </main>

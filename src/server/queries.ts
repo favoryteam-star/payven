@@ -176,6 +176,59 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
   }
 }
 
+// ── 내역(내가 만든 정산) ───────────────────────────────────────────
+
+/** 내역탭 카드 요약(브라우저에 그대로 전달 가능한 평범한 형태). */
+export interface SettlementSummary {
+  slug: string
+  name: string
+  kind: string
+  createdAt: string
+  memberCount: number
+  total: number // 정수 원
+}
+
+/**
+ * 로그인 사용자가 만든 정산 목록(최신순). 내역탭(Server Component)이 직접 호출하는 읽기.
+ * owner_id 없는(무로그인 생성) 정산은 제외. N+1 없이 3쿼리(그룹→멤버/지출 한 번씩)로 집계.
+ */
+export async function listGroupsByOwner(ownerId: string): Promise<SettlementSummary[]> {
+  const supa = getAdminClient()
+  const { data: groups, error } = await supa
+    .from('groups')
+    .select('id, slug, name, kind, created_at')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  if (!groups || groups.length === 0) return []
+
+  const ids = groups.map((g) => g.id)
+  const [membersRes, expensesRes] = await Promise.all([
+    supa.from('members').select('group_id').in('group_id', ids),
+    supa.from('expenses').select('group_id, amount').in('group_id', ids),
+  ])
+  if (membersRes.error) throw new Error(membersRes.error.message)
+  if (expensesRes.error) throw new Error(expensesRes.error.message)
+
+  const memberCount = new Map<string, number>()
+  for (const m of membersRes.data ?? []) {
+    memberCount.set(m.group_id, (memberCount.get(m.group_id) ?? 0) + 1)
+  }
+  const totalByGroup = new Map<string, number>()
+  for (const e of expensesRes.data ?? []) {
+    totalByGroup.set(e.group_id, (totalByGroup.get(e.group_id) ?? 0) + e.amount)
+  }
+
+  return groups.map((g) => ({
+    slug: g.slug,
+    name: g.name,
+    kind: g.kind,
+    createdAt: g.created_at,
+    memberCount: memberCount.get(g.id) ?? 0,
+    total: totalByGroup.get(g.id) ?? 0,
+  }))
+}
+
 // ── 저장 계좌(받는 사람 계좌) ──────────────────────────────────────
 // 전부 user_id로 스코프 → 한 사용자가 남의 계좌를 건드릴 수 없음(service_role여도 방어).
 // '유저당 기본 1개' 부분 유니크 인덱스(0006) 충돌을 피하려고 기본 전환은 항상 '먼저 끄고 켜기' 순서.

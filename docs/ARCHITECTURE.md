@@ -75,7 +75,7 @@ payven/
 ## 3. Supabase는 어디 사나 / 어떻게 닿나
 
 - **`src/server/db.ts`** — `import 'server-only'` 후 `createClient(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth:{ persistSession:false } })` 모듈 싱글톤. **여기서만** 시크릿을 읽는다.
-- **`src/server/queries.ts`** — 유일하게 `.from()/.select()/.insert()`를 호출. DB 행↔도메인 타입 정규화(특히 `bigint→number`)를 이 경계에서 인라인 처리. 함수 예: `getGroupBySlug`, `createQuickSettle`, `createGroup`, `addMember`, `deleteMemberIfUnused`, `addExpenseWithShares`, `recordSettlement`, `deleteStaleQuickGroups`.
+- **`src/server/queries.ts`** — 유일하게 `.from()/.select()/.insert()`를 호출. DB 행↔도메인 타입 정규화(특히 `bigint→number`)를 이 경계에서 인라인 처리. 함수 예: `getGroupBySlug`, `createQuickSettle`, `addItemizedBill`, `listGroupsByOwner`(내역=owner_id 집계), 저장계좌 CRUD(`listUserAccounts` 등), `deleteStaleQuickGroups`.
 - **닿는 경로 두 가지(둘 다 서버):**
   1. **읽기** — Server Component(`g/[slug]/page.tsx`)가 렌더 중 `await getGroupBySlug(slug)` → `domain/settle`로 잔액 계산 → HTML. 브라우저는 키를 못 봄(= "모든 접근은 서버 경유"가 기본 충족, API hop 0).
   2. **쓰기** — Server Action(`actions.ts`)이 같은 `queries.ts` 함수 호출 후 `revalidatePath('/g/'+slug)`.
