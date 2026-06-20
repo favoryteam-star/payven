@@ -41,11 +41,11 @@ export default function ItemizedPage() {
       ? (accounts?.find((a) => a.isDefault)?.id ?? accounts?.[0]?.id ?? '')
       : accountId
 
-  // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원 + 자동 제출(두 번 안 누르게)
+  // 로그인 왕복 후 복귀 → 저장해둔 입력값 복원 + 자동 제출(두 번 안 누르게).
+  // ?resume=1은 OAuth 리다이렉트에서 사라질 수 있어 신뢰 못 함 → sessionStorage draft 존재로 복원.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get('resume') !== '1') return
-    window.history.replaceState(null, '', '/items')
+    if (params.get('resume') === '1') window.history.replaceState(null, '', '/items')
     const raw = sessionStorage.getItem('payven:draft:items')
     if (!raw) return
     sessionStorage.removeItem('payven:draft:items')

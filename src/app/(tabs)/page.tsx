@@ -38,11 +38,17 @@ export default function Home() {
       ? (accounts?.find((a) => a.isDefault)?.id ?? accounts?.[0]?.id ?? '')
       : accountId
 
-  // 로그인 왕복 후 복귀(?resume=1) → 저장해둔 입력값 복원 + 자동 제출(두 번 안 누르게)
+  // 로그인 왕복 후 복귀 → 저장해둔 입력값 복원 + 자동 제출(두 번 안 누르게).
+  // ?resume=1은 OAuth 리다이렉트(Supabase Site URL 폴백 → 미들웨어 ?code 라우팅)에서 사라질 수 있어
+  // 신뢰 못 함. sessionStorage draft 존재 자체를 복원 신호로 쓴다(같은 탭이라 왕복에도 살아남음).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get('resume') !== '1') return
-    window.history.replaceState(null, '', '/')
+    if (params.get('resume') === '1') window.history.replaceState(null, '', '/')
+    // 항목별 정산 중이었으면(폴백 복귀가 홈으로 떨어져도) 항목별 페이지에서 복원되게 그쪽으로 보냄.
+    if (sessionStorage.getItem('payven:draft:items')) {
+      window.location.replace('/items')
+      return
+    }
     const raw = sessionStorage.getItem('payven:draft:quick')
     if (!raw) return
     sessionStorage.removeItem('payven:draft:quick')
