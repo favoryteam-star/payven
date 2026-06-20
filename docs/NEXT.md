@@ -1,17 +1,18 @@
 # 페이븐 — 다음 세션 핸드오프 (2026-06-20)
 
-> 새 세션은 이 파일 + 메모리(자동 로드)부터 읽고 이어서 진행. 결정: **색=그린 확정**. **정체성·M3 항목별·M4 카카오 인증+만들기 게이트 완료·라이브(2026-06-19)**. **받는 사람 저장 계좌+예금주+토스 버튼 완료(2026-06-20, 작업 3)**. 다음 = **저장계좌 로그인 스모크 → 구글 로그인 또는 M5 내역**.
+> 새 세션은 이 파일 + 메모리(자동 로드)부터 읽고 이어서 진행. 결정: **색=그린 확정**. **정체성·M3 항목별·M4 카카오 인증+만들기 게이트 완료·라이브(2026-06-19)**. **받는 사람 저장 계좌(은행/계좌번호/예금주)+토스 버튼+계좌입력 UX 완료·라이브(2026-06-20, 작업 3)** — 인라인 입력·은행 커스텀 드롭다운·숫자만+은행별 하이픈 자동·멤버 엔터 추가. 다음 = **저장계좌 로그인 스모크(폰) → 구글 로그인 또는 M5 내역**.
 
 ## 현재 상태 (M0~M3 + M4 카카오 인증·만들기 게이트 완료, 라이브)
 - 라이브(공유용): **`payven-hazel.vercel.app`** (에메랄드 그린). `git push origin main` → Vercel 자동배포.
 - IDs: Supabase project `gtssqmibfhkyffvrkhzy`(서울 icn1) / Vercel project `prj_yppD4l9aEleBsPUmZ8iA3yqXGoNm`, team `team_SyQ2rJNlnFscaz3yop6KIfLb`. 카카오 앱 `1491200`(비즈앱).
 - MCP: **supabase + vercel 둘 다 연결됨**(`.mcp.json`, gitignore). `.env.local`+Vercel env에 URL·service_role·**`SUPABASE_ANON_KEY`(서버전용 anon — NEXT_PUBLIC_ 아님)**.
-- 검증: `npm test`(34 green) · `npm run build` · `npm run lint` 통과.
+- 검증: `npm test`(**41 green**) · `npm run build` · `npm run lint` 통과.
 - 코드 지도:
   - `src/domain/` settle(`equalSplit`/`splitByWeights`·netBalances·minimizeCashFlow)·money·rules·types (정산 엔진, 테스트됨)
   - `src/server/` db(service_role)·**`auth.ts`(@supabase/ssr, anon 서버전용·쿠키 세션)**·queries(createQuickSettle·addItemizedBill RPC+owner_id+계좌, getGroupBySlug, **저장계좌 CRUD `listUserAccounts`/`createUserAccount`/`updateUserAccount`/`deleteUserAccount`/`setDefaultUserAccount`**)·ratelimit·validation(+`accountFieldsSchema`/`saveAccountSchema`/`updateAccountSchema`)·database.types
   - `src/app/(tabs)/` 홈(숫자패드+**받을계좌선택**)·내역(빈)·마이(로그인/로그아웃+**내 계좌 관리** `_components/AccountManager`) + `g/[slug]/settle`(+**받는사람 계좌·계좌복사·토스송금** `_components/TossButton`) + `items`(항목별+받을계좌) + `auth/{login,callback,logout}` 라우트 + `actions.ts`(+저장계좌 액션 5종·`getMyAccountsAction`) + `src/middleware.ts`(세션갱신·`?code`→콜백 안전망)
-  - `src/components/` Logo·ModeChips·LoginSheet·Numpad·BottomNav·ShareButton·icons·ServiceWorkerRegister·**AccountSelect(`useMyAccounts` 훅+칩)**
+  - `src/components/` Logo·ModeChips·LoginSheet·Numpad·BottomNav·ShareButton·icons·ServiceWorkerRegister·**AccountSelect(`useMyAccounts`훅+`AccountField`[칩/인라인]+`resolveAccount`)**·**BankSelect(커스텀 드롭다운, flip)**
+  - `src/lib/` toss(딥링크)·share·banks·**account(`onlyDigits`/`formatAccountNo` 은행별 하이픈, +test)**
   - `supabase/migrations/0001~0008`(init·quick_settle·itemized·group owner_id·rpc owner_id·**user_accounts+members.account_holder**·**rpc 계좌 파라미터**·**기본계좌 원자 RPC `set_default_account`/`delete_account`**)
   - PWA: `app/manifest.ts`·`public/sw.js`(v3, `/auth` 우회)·`public/icon.svg`·`app-icon-{192,256,512}.png`(생성기 `scripts/gen-icon.js`)
 - 디자인 토큰: `tailwind.config.ts` brand = 그린 `#0FA177`. Pretendard, `.num`(tabular-nums), `pb-safe`.
@@ -57,9 +58,18 @@
 - **검증**: RPC 멤버0 부착 실DB e2e · `user_accounts` RLS/정책0/REVOKE/유니크인덱스 카탈로그 확인 · 정산결과 무로그인 렌더 프리뷰(콘솔 0 에러) · 새 기본/삭제 RPC 실DB e2e · build·lint·test(34) green. **잔여(수동)**: 카카오 로그인 후 마이 CRUD·만들기 자동채움 폰 스모크.
 - **결정 핀**: 받는 사람 범위='내 계좌만', 저장='여러 개+기본 지정'(사용자 선택).
 
+### 작업 3 후속 — 계좌입력 UX 이터레이션 (완료·라이브 2026-06-20, 사용자 피드백 연속 반영)
+폰에서 라이브 보며 즉석 수정 → 각 건 커밋·배포(8커밋: cd2c824~3ed36a4). 전부 build·lint·test(41) green + 프리뷰로 동작 확인.
+- **인라인 입력 전환**: 저장계좌 없을 때 안내 링크 → 은행/계좌/예금주 입력란 직접 노출(입력→정산 시 자동 저장, 비우면 계좌 없이). `resolveAccount`/`saveAccount`(액션 베스트에포트 저장, 중복 건너뜀).
+- **은행 커스텀 드롭다운 `BankSelect`**: 네이티브 select→커스텀(화살표 패딩 안쪽, 열린 메뉴=둥근 패널+그림자+선택 브랜드그린·체크, 얇은 스크롤바 모서리 클립). **공간 부족하면 위로 flip + 가용 높이 제한**(하단 탭바 잘림 방지).
+- **계좌번호 숫자만 + 은행별 하이픈 자동**: `lib/account`(`onlyDigits`/`formatAccountNo`, 은행별 그룹 테이블). 저장·송금·검증은 숫자만(account_no 숫자 저장), 표시만 하이픈. 은행 바꾸면 즉시 재포맷, 초과 숫자 보존. **하이픈 위치는 best-effort**(상품별 다를 수 있음, 숫자가 정본) — 통장과 다른 은행 있으면 `BANK_GROUPS` 한 줄 수정.
+- **멤버 엔터로 추가/이동**: '누구랑 나눠요?' 입력 후 엔터(모바일 `enterKeyHint="next"`) → 마지막 칸이면 새 사람 추가+포커스, 중간이면 다음 칸 이동, 빈 칸은 무시. 홈·항목별 양쪽.
+- **잡 수정**: 홈 '1인당' 박스↔정산하기 버튼 간격(mb-4). Vercel 웹훅 누락 1건 → 빈 커밋(31ab5ec) 재트리거로 복구.
+- **권한**: `git push origin main` 자동 허용 규칙을 `.claude/settings.local.json`(로컬, 커밋 안 함)에 추가 — 이후 배포 시 안 물어봄.
+
 ## ▶ 다음 세션 시작점
-1. **저장 계좌 로그인 스모크** — 카카오 로그인 후 마이에서 계좌 추가/기본지정/수정/삭제 + 만들기 자동채움 확인(폰).
-2. 남은 UX 미세조정 있으면 반영.
+1. **저장 계좌 로그인 스모크(폰, 미완)** — 카카오 로그인 후: 마이 계좌 추가/기본지정/수정/삭제 + 만들기에서 자동채움(인라인 입력 첫 저장→다음엔 칩) + 숫자만/하이픈 + 정산결과 토스 버튼. (OAuth라 이 세션에서 자동검증 불가했음.)
+2. 본인 은행 계좌번호 하이픈이 통장과 다르면 `src/lib/account.ts` `BANK_GROUPS` 보정.
 3. 그다음 택1: **구글 로그인 추가**(M4 잔여) 또는 **M5 내역**(내 정산 저장·내역탭 표시·`settlements` 완료기록).
 
 ## 이후 마일스톤
