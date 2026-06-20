@@ -95,3 +95,15 @@
 - **범위 밖(후속 증분 B):** per-transfer **송금완료 기록**(기존 `settlements` 테이블 = "보냈어요" → `netBalances`가 차감, "완료" 배지) — 이건 **공개 링크의 write**라 `withRateLimit`+zod 필요, 별도 증분. 그룹(`kind='group'`) 지속/이름 편집도 후속.
 - **검증:** test 47 green(+`datetime` 6, KST 경계 포함)·build(`/history` ƒ Dynamic = server-only 누수 0)·lint. 실DB로 owner 스코프(나희진 4건 반환·null-owner 제외)·집계(인원/총액) 대조. 프리뷰로 미로그인 CTA 렌더(콘솔·서버 에러 0, 카카오 링크 `next=/history`). 로그인 목록 렌더는 OAuth라 폰 스모크 잔여.
 - **상태:** 확정(증분 A=목록). 마이그레이션 없음. 잔여: 송금완료 기록(증분 B)·로그인 목록 폰 스모크.
+
+### ADR-015 — 공유 정산 페이지 = 인터랙티브 보드(개인화 '내 것만 콕' + 송금완료/취소) ★
+- **맥락:** `/g/[slug]/settle`는 친구가 읽는 공유 페이지. "만든 사람 시점" 정적 리스트 → "읽는 친구 시점"으로 개편(웨이브1=받는사람 실명+맥락 [[ADR-013]] 후속). 웨이브2 = 개인화 + ADR-014가 미룬 증분 B(송금완료 기록).
+- **결정:**
+  1. **클라 컴포넌트 하나 `SettleBoard`(settle `_components/`)** — page는 여전히 계산(`netBalances`/`minimizeCashFlow`)만 하고 **plain props**(`members`[이름=displayName 해석됨]·`pending`·`done`·`account`·`accountMemberId`)를 넘김. 컴포넌트는 **필터·렌더만**(하드룰: 컴포넌트 안 settle 재계산 금지). 요약 히어로(총/1인당/맥락)·공유 푸터는 서버 렌더 유지.
+  2. **신원 선택(개인화)** = `localStorage['payven:me:'+slug]`(서버 모름). 없으면 "이 정산에서 당신은?" 멤버 칩 → 저장. "내가 아니에요" 리셋. SSR/첫 페인트는 meId=null로 안정 → 하이드레이트 후 복원(하이드레이션 미스매치 0). 저장된 id가 멤버에 없으면 무시.
+  3. **내 차례 히어로:** 내가 debtor면 "{받는사람}님에게 {금액} 보내면 끝" + 계좌(받는사람=계좌주인일 때 inline)·토스/복사 + **보냈어요**. 내가 받는 사람이면 "받을 차례 — 총 {합}" + 대기/받음 목록. 둘 다 아니면 "정산할 게 없어요". 아래 **전체 보기** 토글로 기존 pending/done 리스트.
+  4. **송금완료(공개 링크 write → 하드룰6: withRateLimit+zod 필수):** `recordSettlement(slug,from,to,amount)`(server/queries) → `markSentAction`. `undoSettlement(slug,settlementId)` → `undoSettlementAction`. 둘 다 성공 시 `revalidatePath('/g/'+slug+'/settle')` + 클라 `router.refresh()`. **net 가드**(`fromOwes≥amount && toOwed≥amount`, `netBalances` 재계산)로 **과다기록·역방향(net 부호 뒤집힘) 차단** — 여러 명이 같은 송금을 눌러도 안전, 정산 끝났으면 "이미 정산됐어요"로 거부. undo는 **그 그룹(slug)에 속한 settlement만** 삭제(타 그룹 id 차단).
+  5. **표시 타입 분리:** `getGroupBySlug`의 settlements select에 `id` 추가 → `SettledTransfer{id,from,to,amount}`(표시·취소용). **`netBalances`엔 여전히 `SettlementRecord{from,to,amount}`만**(도메인 불변, id 누수 0). 둘 다 같은 행에서 매핑.
+- **근거:** settlements가 이미 `netBalances`에 반영되므로 **남은 송금 차감은 minimizeCashFlow가 자동** — 보드는 insert/delete 한 송금만 하면 됨(도메인 재계산은 page가). '내 계좌만'은 각 debtor 독립이라 한 명 완료해도 나머지 재페어링 안정. 스키마 변경 0(settlements 테이블이 이미 id/from/to/amount/group_id 보유).
+- **검증:** test 49 green·lint·build(`/g/[slug]/settle` ƒ Dynamic = server-only 누수 0). **무로그인 프리뷰 e2e**(슬러그 `beLVTdnLqgAWK5ELGa_aI`, 나희진=받는쪽·계좌 있음): 신원없음(칩+배너+리스트)→김철수 선택(채무자 히어로)→보냈어요(**실DB insert 확인** 김철수→나 16667)→차감·"정산할 게 없어요"→전체보기 done [취소]→취소(**실DB delete 확인**)→복원→나희진 선택("받을 차례 33,333"+대기목록)→둘 다 보냈어요→**"딱 맞췄어요" 자연 수렴**→취소로 정리(0건 복구). **주의(검증 중 발견):** dev에서 이전 세션 PWA SW(`payven-shell-v3`)가 `/_next/static` cache-first로 옛 청크 서빙 → "Cannot read properties of undefined (reading 'call')" → SW 해제+캐시 삭제로 해결, 캐시 버전 v4로 올림(반환 사용자 누적 캐시 정리). 프로덕션은 콘텐츠 해시 파일명이라 안전.
+- **상태:** 확정·검증(라이브 배포 대기). 마이그레이션 없음. 잔여: 폰 스모크(실기기 localStorage 신원·토스 딥링크).

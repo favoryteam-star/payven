@@ -1,7 +1,7 @@
 import 'server-only'
 import { nanoid } from 'nanoid'
 import { getAdminClient } from './db'
-import { equalSplit, splitByWeights } from '@/domain/settle'
+import { equalSplit, netBalances, splitByWeights } from '@/domain/settle'
 import type { ExpenseRecord, SettlementRecord } from '@/domain/types'
 import type {
   ItemizedBillInput,
@@ -29,11 +29,20 @@ export interface SavedAccount {
   isDefault: boolean
 }
 
+/** 기록된 송금완료(표시·취소용, settlement id 포함). 도메인 SettlementRecord와 달리 id를 들고 다님. */
+export interface SettledTransfer {
+  id: string
+  from: string
+  to: string
+  amount: number
+}
+
 export interface GroupSnapshot {
   group: { id: string; slug: string; name: string; kind: string; createdAt: string }
   members: SnapshotMember[]
   expenses: ExpenseRecord[]
-  settlements: SettlementRecord[]
+  settlements: SettlementRecord[] // 도메인 입력(netBalances) — id 없음(도메인 불변)
+  settledTransfers: SettledTransfer[] // 화면 표시·취소용 — id 있음
 }
 
 /** 빠른정산: 임시그룹+멤버+지출+분담을 RPC로 원자적 생성. 분담은 도메인에서 계산. ownerId=로그인 사용자. */
@@ -133,7 +142,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
       .eq('group_id', group.id)
       .order('created_at'),
     supa.from('expenses').select('id, amount, paid_by').eq('group_id', group.id),
-    supa.from('settlements').select('from_member, to_member, amount').eq('group_id', group.id),
+    supa.from('settlements').select('id, from_member, to_member, amount').eq('group_id', group.id),
   ])
 
   const expenses = expensesRes.data ?? []
@@ -156,7 +165,14 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
     shares: sharesByExpense.get(e.id) ?? [],
   }))
 
-  const settlementRecords: SettlementRecord[] = (settlementsRes.data ?? []).map((s) => ({
+  const settledRows = settlementsRes.data ?? []
+  const settlementRecords: SettlementRecord[] = settledRows.map((s) => ({
+    from: s.from_member,
+    to: s.to_member,
+    amount: s.amount,
+  }))
+  const settledTransfers: SettledTransfer[] = settledRows.map((s) => ({
+    id: s.id,
     from: s.from_member,
     to: s.to_member,
     amount: s.amount,
@@ -173,7 +189,71 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
     })),
     expenses: expenseRecords,
     settlements: settlementRecords,
+    settledTransfers,
   }
+}
+
+// ── 송금완료 기록/취소(공유 정산 페이지, 무로그인 공개 write) ──────────
+// settlements는 이미 netBalances에 반영됨(낸 빚↓). 표시되는 남은 송금은 minimizeCashFlow가 자동 차감.
+// 따라서 여기선 '한 번에 한 송금'만 안전하게 insert/delete 하면 됨(도메인 재계산은 페이지가 함).
+
+/**
+ * 송금완료 1건 기록. slug→group, from/to가 그 그룹 멤버인지 + net 가드(과다기록·역방향 방지) 후 insert.
+ * net 가드: from이 아직 ≥amount 빚이 있고 to가 아직 ≥amount 받을 게 있어야 함 → 중복/이중 표시(여러 명이
+ * 같은 송금을 눌러도) 가 net을 음수로 뒤집어 '역방향 송금'을 만드는 걸 차단. 정산 끝났으면 거부.
+ */
+export async function recordSettlement(
+  slug: string,
+  fromId: string,
+  toId: string,
+  amount: number,
+): Promise<{ ok: true } | { ok: false; reason: 'notfound' | 'member' | 'settled' | 'amount' }> {
+  if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: 'amount' }
+  if (fromId === toId) return { ok: false, reason: 'member' }
+
+  const snap = await getGroupBySlug(slug)
+  if (!snap) return { ok: false, reason: 'notfound' }
+  const ids = new Set(snap.members.map((m) => m.id))
+  if (!ids.has(fromId) || !ids.has(toId)) return { ok: false, reason: 'member' }
+
+  const net = netBalances(
+    snap.members.map((m) => m.id),
+    snap.expenses,
+    snap.settlements,
+  )
+  const fromOwes = -(net.get(fromId) ?? 0) // 양수면 아직 낼 빚
+  const toOwed = net.get(toId) ?? 0 // 양수면 아직 받을 채권
+  if (fromOwes < amount || toOwed < amount) return { ok: false, reason: 'settled' }
+
+  const supa = getAdminClient()
+  const { error } = await supa.from('settlements').insert({
+    group_id: snap.group.id,
+    from_member: fromId,
+    to_member: toId,
+    amount,
+  })
+  if (error) throw new Error(error.message)
+  return { ok: true }
+}
+
+/** 송금완료 취소. 그 그룹(slug)에 속한 settlement만 삭제(다른 그룹 id로는 못 지움). */
+export async function undoSettlement(slug: string, settlementId: string): Promise<{ ok: boolean }> {
+  const supa = getAdminClient()
+  const { data: group, error: gErr } = await supa
+    .from('groups')
+    .select('id')
+    .eq('slug', slug)
+    .maybeSingle()
+  if (gErr) throw new Error(gErr.message)
+  if (!group) return { ok: false }
+
+  const { error, count } = await supa
+    .from('settlements')
+    .delete({ count: 'exact' })
+    .eq('id', settlementId)
+    .eq('group_id', group.id)
+  if (error) throw new Error(error.message)
+  return { ok: (count ?? 0) > 0 }
 }
 
 // ── 내역(내가 만든 정산) ───────────────────────────────────────────

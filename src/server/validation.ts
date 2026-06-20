@@ -101,3 +101,27 @@ export const itemizedBillSchema = z
   })
 
 export type ItemizedBillInput = z.infer<typeof itemizedBillSchema>
+
+// ── 공유 정산 페이지의 송금완료(settlements) — 무로그인 공개 write ──
+// slug = nanoid(21, [A-Za-z0-9_-]). from/to는 그 그룹 멤버 uuid(서버에서 멤버십·net 재검증).
+const slugSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{10,40}$/, '잘못된 링크예요')
+
+// "보냈어요": 특정 송금(from→to, amount)을 완료로 기록.
+export const markSentSchema = z
+  .object({
+    slug: slugSchema,
+    from: z.string().uuid(),
+    to: z.string().uuid(),
+    amount: z.number().int().positive().max(1_000_000_000),
+  })
+  .refine((v) => v.from !== v.to, { message: '보내는/받는 사람이 같아요', path: ['to'] })
+
+export type MarkSentInput = z.infer<typeof markSentSchema>
+
+// "취소": 기록한 송금완료를 되돌림(settlement id).
+export const undoSettlementSchema = z.object({
+  slug: slugSchema,
+  settlementId: z.string().uuid(),
+})
+
+export type UndoSettlementInput = z.infer<typeof undoSettlementSchema>

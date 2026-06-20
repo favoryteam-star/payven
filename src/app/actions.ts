@@ -1,11 +1,14 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { withRateLimit } from '@/server/ratelimit'
 import {
   accountIdSchema,
   itemizedBillSchema,
+  markSentSchema,
   quickSettleSchema,
   saveAccountSchema,
+  undoSettlementSchema,
   updateAccountSchema,
   type AccountFields,
 } from '@/server/validation'
@@ -15,7 +18,9 @@ import {
   createUserAccount,
   deleteUserAccount,
   listUserAccounts,
+  recordSettlement,
   setDefaultUserAccount,
+  undoSettlement,
   updateUserAccount,
   type SavedAccount,
 } from '@/server/queries'
@@ -101,5 +106,28 @@ export const setDefaultAccountAction = withRateLimit(async (raw: unknown): Promi
   if (!user) return { ok: false, needLogin: true }
   const { id } = accountIdSchema.parse(raw)
   await setDefaultUserAccount(user.id, id)
+  return { ok: true }
+})
+
+// ── 공유 정산 페이지 송금완료(무로그인 공개 write) ─────────────────
+// 보기는 무로그인이라 이 두 액션도 로그인 없이 호출됨 → withRateLimit + zod 필수(하드룰 6).
+// 멤버십·net 가드는 server/queries에서(과다기록·역방향 차단). 성공 시 해당 정산 페이지만 revalidate.
+type SettleWriteResult = { ok: true } | { ok: false; error: string }
+
+export const markSentAction = withRateLimit(async (raw: unknown): Promise<SettleWriteResult> => {
+  const input = markSentSchema.parse(raw)
+  const res = await recordSettlement(input.slug, input.from, input.to, input.amount)
+  if (!res.ok) {
+    return { ok: false, error: res.reason === 'settled' ? '이미 정산됐어요' : '기록하지 못했어요' }
+  }
+  revalidatePath(`/g/${input.slug}/settle`)
+  return { ok: true }
+})
+
+export const undoSettlementAction = withRateLimit(async (raw: unknown): Promise<SettleWriteResult> => {
+  const input = undoSettlementSchema.parse(raw)
+  const res = await undoSettlement(input.slug, input.settlementId)
+  if (!res.ok) return { ok: false, error: '취소하지 못했어요' }
+  revalidatePath(`/g/${input.slug}/settle`)
   return { ok: true }
 })
