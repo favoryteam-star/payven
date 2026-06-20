@@ -37,7 +37,7 @@
 ## 캐리오버 TODO
 - M3 후속: 항목별 결제자(현재 영수증 1명) · 부가세/봉사료 옵션(별도 expense로 subtotal 가중) · 수량(parts) 가중 입력 · 영수증 이름 필드
 - `NEXT_PUBLIC_SITE_URL=https://payven-hazel.vercel.app` (OG 절대경로)
-- Upstash 레이트리밋 활성(현재 no-op, **프로덕션 미설정 시 fail-fast 가드도 함께** — 리뷰 지적) · Vercel 함수 리전 icn1(`vercel.json`) · PNG/apple-touch 아이콘 · 카카오 리치 공유카드
+- Upstash 레이트리밋 활성(현재 no-op, **프로덕션 미설정 시 fail-fast 가드도 함께** — 리뷰 지적) · ✅ Vercel 함수 리전 icn1(`vercel.json`, 2026-06-20 — DB와 동일 리전) · PNG/apple-touch 아이콘 · 카카오 리치 공유카드
 - 노출된 service_role 키·MCP 토큰 **프로덕션 전 롤**
 - repo 문서(CLAUDE/PLAN/ARCHITECTURE/DECISIONS)는 아직 무로그인 V0/V1 기준 → **V2(인증·항목별·PWA)로 갱신 필요**(M4 인증 때 함께)
 
