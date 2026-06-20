@@ -86,9 +86,10 @@ export default function Home() {
 
   const filled = members.filter((m) => m.trim())
   const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
-  // 단위 반올림 미리보기(균등이라 base는 전원 동일). 남는 금액(leftover)은 고른 사람이 흡수.
-  const roundBase = unit > 1 && perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
-  const leftover = unit > 1 && perPerson > 0 ? amount - roundBase * filled.length : 0
+  // 분담 미리보기(균등이라 base는 전원 동일). 단위로 안 떨어지면 남는 금액(leftover)은 고른 사람이 흡수.
+  // unit=1(안 함)도 안 나눠떨어지면 leftover(1~2원)가 생기고, 똑같이 받을 사람을 고른다.
+  const roundBase = perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
+  const leftover = perPerson > 0 ? amount - roundBase * filled.length : 0
 
   const setMember = (i: number, v: string) =>
     setMembers((p) => p.map((m, idx) => (idx === i ? v : m)))
@@ -114,9 +115,9 @@ export default function Home() {
     if (names.length < 2) return setError('최소 2명이 필요해요')
     const payerName = trimmed[payerIndex] || names[0]
     const payerIdx = Math.max(0, names.indexOf(payerName))
-    // 단위 반올림 시 남는 금액이 있으면 받을 사람을 골라야(매번 직접 선택). absorberIndex는 names 기준으로 변환.
-    const base = unit > 1 ? Math.floor(amount / (names.length * unit)) * unit : 0
-    const left = unit > 1 ? amount - base * names.length : 0
+    // 안 나눠떨어지면(단위 무관, 안 함의 1~2원 포함) 남는 금액 받을 사람을 골라야(매번 직접 선택).
+    const base = Math.floor(amount / (names.length * unit)) * unit
+    const left = amount - base * names.length
     let absorberIdx: number | undefined
     if (left > 0) {
       if (absorberIndex === null) return setError('남은 금액 받을 사람을 골라주세요')
@@ -264,40 +265,36 @@ export default function Home() {
             ))}
           </div>
 
-          {unit > 1 &&
-            (leftover > 0 ? (
-              <div className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-                <p className="text-sm text-neutral-600 dark:text-neutral-300">
-                  각자 <span className="num font-semibold text-brand">{formatWon(roundBase)}</span> · 남은{' '}
-                  <span className="num font-semibold">{formatWon(leftover)}</span> 누가 낼까요?
-                </p>
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {members.map((m, i) =>
-                    m.trim() ? (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setAbsorberIndex(i)
-                          setError(null)
-                        }}
-                        className={
-                          'rounded-full px-4 py-2 text-sm font-medium transition ' +
-                          (absorberIndex === i
-                            ? 'bg-brand text-white'
-                            : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
-                        }
-                      >
-                        {m.trim()}
-                      </button>
-                    ) : null,
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p className="mt-2 text-xs text-neutral-400">
-                딱 떨어져요 — 각자 {formatWon(roundBase)}씩.
+          {/* 단위로 안 떨어지면(안 함의 1~2원 포함) 남는 금액 받을 사람을 직접 고른다(자동 기본값 없음). */}
+          {leftover > 0 && (
+            <div className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
+              <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                각자 <span className="num font-semibold text-brand">{formatWon(roundBase)}</span> · 남은{' '}
+                <span className="num font-semibold">{formatWon(leftover)}</span> 누가 낼까요?
               </p>
-            ))}
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {members.map((m, i) =>
+                  m.trim() ? (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setAbsorberIndex(i)
+                        setError(null)
+                      }}
+                      className={
+                        'rounded-full px-4 py-2 text-sm font-medium transition ' +
+                        (absorberIndex === i
+                          ? 'bg-brand text-white'
+                          : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                      }
+                    >
+                      {m.trim()}
+                    </button>
+                  ) : null,
+                )}
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -322,10 +319,10 @@ export default function Home() {
         </section>
       )}
 
-      {perPerson > 0 && unit === 1 && (
+      {perPerson > 0 && leftover === 0 && (
         <div className="mb-4 rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
           <span className="text-sm text-neutral-500">1인당 </span>
-          <span className="num text-lg font-bold text-brand">{formatWon(perPerson)}</span>
+          <span className="num text-lg font-bold text-brand">{formatWon(roundBase)}</span>
         </div>
       )}
 

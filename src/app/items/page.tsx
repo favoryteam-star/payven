@@ -157,15 +157,13 @@ export default function ItemizedPage() {
     const byId = new Map(shares.map((s) => [s.memberId, s.amount]))
     for (const oi of parts) tabs[filledIdx.indexOf(oi)] += byId.get(String(oi)) ?? 0
   }
-  // 단위로 안 떨어져 남는 금액(항목별 합). 0이면 흡수자 선택 불필요.
+  // 안 나눠떨어져 남는 금액(항목별 합). unit=1(안 함)도 항목이 안 떨어지면 생긴다. 0이면 흡수자 선택 불필요.
   let roundLeftover = 0
-  if (unit > 1) {
-    for (const it of items) {
-      if (it.amount <= 0) continue
-      const np = filledIdx.filter((fi) => it.among[fi]).length
-      if (np === 0) continue
-      roundLeftover += it.amount - Math.floor(it.amount / (np * unit)) * unit * np
-    }
+  for (const it of items) {
+    if (it.amount <= 0) continue
+    const np = filledIdx.filter((fi) => it.among[fi]).length
+    if (np === 0) continue
+    roundLeftover += it.amount - Math.floor(it.amount / (np * unit)) * unit * np
   }
 
   function submit() {
@@ -186,9 +184,9 @@ export default function ItemizedPage() {
       payload.push({ description: it.name.trim() || undefined, amount: it.amount, participants })
     }
 
-    // 단위로 안 떨어져 남는 금액이 있으면 받을 사람을 골라야(매번 직접 선택). filled 위치로 변환.
+    // 안 나눠떨어져 남는 금액이 있으면(안 함 포함) 받을 사람을 골라야(매번 직접 선택). filled 위치로 변환.
     let absorberIdx: number | undefined
-    if (unit > 1 && roundLeftover > 0) {
+    if (roundLeftover > 0) {
       if (absorberIndex === null) return setError('남은 금액 받을 사람을 골라주세요')
       const pos = filledIdx.indexOf(absorberIndex)
       if (pos < 0) return setError('남은 금액 받을 사람을 다시 골라주세요')
@@ -320,35 +318,33 @@ export default function ItemizedPage() {
               </button>
             ))}
           </div>
-          {unit > 1 &&
-            (roundLeftover > 0 ? (
-              <div className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-                <p className="text-sm text-neutral-600 dark:text-neutral-300">
-                  남는 <span className="num font-semibold">{formatWon(roundLeftover)}</span> 누가 낼까요?
-                </p>
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {filledIdx.map((fi) => (
-                    <button
-                      key={fi}
-                      onClick={() => {
-                        setAbsorberIndex(fi)
-                        setError(null)
-                      }}
-                      className={
-                        'rounded-full px-4 py-2 text-sm font-medium transition ' +
-                        (absorberIndex === fi
-                          ? 'bg-brand text-white'
-                          : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
-                      }
-                    >
-                      {members[fi].trim()}
-                    </button>
-                  ))}
-                </div>
+          {/* 안 떨어지면(안 함 포함) 남는 금액 받을 사람을 직접 고른다(자동 기본값 없음). */}
+          {roundLeftover > 0 && (
+            <div className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
+              <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                남는 <span className="num font-semibold">{formatWon(roundLeftover)}</span> 누가 낼까요?
+              </p>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {filledIdx.map((fi) => (
+                  <button
+                    key={fi}
+                    onClick={() => {
+                      setAbsorberIndex(fi)
+                      setError(null)
+                    }}
+                    className={
+                      'rounded-full px-4 py-2 text-sm font-medium transition ' +
+                      (absorberIndex === fi
+                        ? 'bg-brand text-white'
+                        : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                    }
+                  >
+                    {members[fi].trim()}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <p className="mt-2 text-xs text-neutral-400">딱 떨어져요 — 남는 금액 없음.</p>
-            ))}
+            </div>
+          )}
         </section>
       )}
 
