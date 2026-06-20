@@ -32,11 +32,13 @@ export default async function SettlePage({ params }: Params) {
 
   const memberIds = snap.members.map((m) => m.id)
   const nameById = new Map(snap.members.map((m) => [m.id, m.name]))
-  const memberById = new Map(snap.members.map((m) => [m.id, m]))
   const net = netBalances(memberIds, snap.expenses, snap.settlements)
   const transfers = minimizeCashFlow(net)
   const total = snap.expenses.reduce((sum, e) => sum + e.amount, 0)
   const perPerson = memberIds.length > 0 ? Math.floor(total / memberIds.length) : 0
+  // '내 계좌만' 모델 — 계좌는 최대 한 명(보통 '나')에게만 붙음. 받는 사람으로 등장하면 위에 한 번만 표시.
+  const accountMember = snap.members.find((m) => m.bankName && m.accountNo) ?? null
+  const showAccount = !!accountMember && transfers.some((t) => t.to === accountMember.id)
 
   return (
     <main className="flex min-h-dvh flex-col px-5 pb-8 pt-5">
@@ -58,6 +60,24 @@ export default async function SettlePage({ params }: Params) {
         </div>
       </section>
 
+      {showAccount && accountMember && (
+        <div className="mb-5 rounded-2xl border border-brand/20 bg-brand/5 px-4 py-3.5 dark:border-brand/25 dark:bg-brand/10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-brand">받는 계좌</p>
+              <p className="num mt-1 text-[15px] font-semibold tracking-tight">
+                <span className="text-neutral-500">{accountMember.bankName}</span>{' '}
+                {formatAccountNo(accountMember.bankName!, accountMember.accountNo!)}
+              </p>
+              {accountMember.accountHolder && (
+                <p className="mt-0.5 text-xs text-neutral-400">예금주 {accountMember.accountHolder}</p>
+              )}
+            </div>
+            <CopyButton value={accountMember.accountNo!} label="계좌 복사" />
+          </div>
+        </div>
+      )}
+
       <h2 className="mb-3 text-sm font-medium text-neutral-500">이렇게 보내면 끝나요</h2>
       {transfers.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50 px-6 py-12 text-center dark:border-neutral-800 dark:bg-neutral-900">
@@ -72,50 +92,32 @@ export default async function SettlePage({ params }: Params) {
       ) : (
         <ul className="flex flex-col gap-2">
           {transfers.map((t, i) => {
-            const receiver = memberById.get(t.to)
-            const hasAccount = !!(receiver?.bankName && receiver?.accountNo)
+            const toAccount = !!accountMember && t.to === accountMember.id
             return (
               <li
                 key={i}
-                className="flex flex-col gap-2.5 rounded-2xl border border-neutral-100 bg-white px-4 py-3.5 dark:border-neutral-800 dark:bg-neutral-900"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-100 bg-white px-4 py-3.5 dark:border-neutral-800 dark:bg-neutral-900"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-[15px]">
-                      <span className="font-semibold">{nameById.get(t.from) ?? '?'}</span>
-                      <span className="mx-1.5 text-neutral-300">→</span>
-                      <span className="font-semibold">{nameById.get(t.to) ?? '?'}</span>
-                    </div>
-                    <div className="num mt-0.5 text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                      {formatWon(t.amount)}
-                    </div>
+                <div className="min-w-0">
+                  <div className="truncate text-[15px]">
+                    <span className="font-semibold">{nameById.get(t.from) ?? '?'}</span>
+                    <span className="mx-1.5 text-neutral-300">→</span>
+                    <span className="font-semibold">{nameById.get(t.to) ?? '?'}</span>
                   </div>
-                  <CopyButton value={String(t.amount)} label="금액 복사" />
+                  <div className="num mt-0.5 text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                    {formatWon(t.amount)}
+                  </div>
                 </div>
-
-                {hasAccount && receiver && (
-                  <div className="flex items-center justify-between gap-2 rounded-xl bg-neutral-50 px-3 py-2 dark:bg-neutral-800/60">
-                    <div className="min-w-0 text-sm">
-                      <div className="truncate">
-                        <span className="text-neutral-500">{receiver.bankName}</span>{' '}
-                        <span className="num">{formatAccountNo(receiver.bankName!, receiver.accountNo!)}</span>
-                      </div>
-                      {receiver.accountHolder && (
-                        <div className="truncate text-xs text-neutral-400">
-                          예금주 {receiver.accountHolder}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <CopyButton value={receiver.accountNo!} label="계좌 복사" />
-                      <TossButton
-                        bankName={receiver.bankName!}
-                        accountNo={receiver.accountNo!}
-                        amount={t.amount}
-                      />
-                    </div>
-                  </div>
-                )}
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <CopyButton value={String(t.amount)} label="금액 복사" />
+                  {toAccount && accountMember && (
+                    <TossButton
+                      bankName={accountMember.bankName!}
+                      accountNo={accountMember.accountNo!}
+                      amount={t.amount}
+                    />
+                  )}
+                </div>
               </li>
             )
           })}

@@ -16,7 +16,7 @@ export function ShareButton({ title }: { title: string }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-brand py-3.5 text-sm font-semibold text-white transition active:scale-[0.99]"
+      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand py-4 text-[15px] font-semibold text-white shadow-sm transition active:scale-[0.99]"
     >
       {done ? <IcoCheck className="h-[18px] w-[18px]" /> : <IcoShare className="h-[18px] w-[18px]" />}
       {done === 'copied' ? '링크 복사됨' : done === 'shared' ? '공유됨' : '공유하기'}
