@@ -108,3 +108,16 @@
 - **근거:** settlements가 이미 `netBalances`에 반영되므로 **남은 송금 차감은 minimizeCashFlow가 자동** — 보드는 insert/delete 한 송금만 하면 됨(도메인 재계산은 page가). '내 계좌만'은 각 debtor 독립이라 한 명 완료해도 나머지 재페어링 안정. 스키마 변경 0(settlements 테이블이 이미 id/from/to/amount/group_id 보유).
 - **검증:** test 49 green·lint·build(`/g/[slug]/settle` ƒ Dynamic = server-only 누수 0). **무로그인 프리뷰 e2e**(슬러그 `beLVTdnLqgAWK5ELGa_aI`, 나희진=받는쪽·계좌 있음): 신원없음(칩+배너+리스트)→김철수 선택(채무자 히어로)→보냈어요(**실DB insert 확인** 김철수→나 16667)→차감·"정산할 게 없어요"→전체보기 done [취소]→취소(**실DB delete 확인**)→복원→나희진 선택("받을 차례 33,333"+대기목록)→둘 다 보냈어요→**"딱 맞췄어요" 자연 수렴**→취소로 정리(0건 복구). **권한(2026-06-20 추가):** 친구 모드(비로그인·owner 있는 `beLVTdnLqgAWK5ELGa_aI`)=전체 목록 읽기 전용·본인 카드만 보냈어요/취소 / 관리 모드(owner 없는 `ocY-D7NpoysmeAdVIuc-G`)=신원 없이 전체 행 관리, 양쪽 실DB insert/delete 대조. 주최자 로그인 경로는 owner 없는 그룹과 렌더 동일(canManageAll=true)이라 폰 스모크 잔여. **주의(검증 중 발견):** dev에서 이전 세션 PWA SW(`payven-shell-v3`)가 `/_next/static` cache-first로 옛 청크 서빙 → "Cannot read properties of undefined (reading 'call')" → SW 해제+캐시 삭제로 해결, 캐시 버전 v4로 올림(반환 사용자 누적 캐시 정리). 프로덕션은 콘텐츠 해시 파일명이라 안전.
 - **상태:** 확정·검증(라이브 배포 대기). 마이그레이션 없음. 잔여: 폰 스모크(**주최자 로그인 시 관리 모드** 렌더·실기기 localStorage 신원·토스 딥링크).
+
+### ADR-016 — 금액 단위 반올림(원/십원/백원/천원) + 남는 금액 흡수자 직접 선택 ★
+- **맥락:** 10,000÷3 = 3,334/3,333/3,333처럼 "애매한 금액"을 친구한테 보내라고 하기 불편 → 각자 3,300 같은 **깔끔한 금액**으로 보내게 하고, 그 때문에 생기는 **남는 금액**을 누가 낼지 직접 고르게(사용자 요청·결정).
+- **사용자 결정(2회 질문):** ⓐ남는 금액 = **매번 직접 선택**(자동 기본값 없음) ⓑ적용 범위 = **빠른정산 + 항목별 둘 다**.
+- **결정:**
+  1. **도메인 `splitByWeights`에 옵션 추가**(하드룰1 단일 출처 유지): 3번째 인자를 `MemberId | SplitOptions`로(과거 `paidBy` 문자열 호출 100% 호환). `SplitOptions{ paidBy?, unit?, absorber? }`. base = `unit`의 배수로 내림(`floor(amount·w/(W·unit))·unit`, 정수만). 남는 금액(leftover)은 **absorber가 참여자면 전부 그 한 명에게**(나머지는 전부 unit 배수=깔끔), 아니면 자동(unit 청크 largest-remainder + sub-unit은 최우선자). **unit=1·absorber 없음이면 기존과 byte-동일**(기존 49 테스트 그대로 green, 신규 9 테스트로 단위/흡수자/불변식 핀, 300-run property).
+  2. **DB·RPC·스키마 변경 0:** 단위·흡수자를 저장하지 않고 *계산된 분담 금액*만 저장(기존 RPC `create_quick_settle`/`add_itemized_bill`이 받던 그대로). 도메인이 합==amount 보장 → RPC 합 검증 통과. **마이그레이션 불필요.**
+  3. **validation:** `roundUnitSchema = union(1,10,100,1000).default(1)` + `absorberIndex?`(멤버 인덱스, superRefine로 범위 검증) — quick·itemized 둘 다.
+  4. **서버:** `createQuickSettle`은 `equalSplit(…, {paidBy,unit,absorber})`, `addItemizedBill`은 항목마다 `splitByWeights(…, {paidBy,unit,absorber})`. **항목별 = 전역 흡수자**(그 항목 참여자일 때만 흡수, 아니면 그 항목만 자동 — 비흡수자는 어느 쪽이든 unit 배수라 깔끔 유지).
+  5. **UI(홈·항목별):** 단위 칩 [안 함·10원·100원·천원](기본 '안 함'=현행, 친구 정산 흐름 안 바뀜). unit>1이고 남는 금액>0이면 **"남은 N원 누가 낼까요?" 멤버 칩(필수 선택)** — 안 고르고 제출하면 "남는 금액 받을 사람을 골라주세요". 홈은 1인당 박스 숨기고 "각자 X·남은 Y" 미리보기, 항목별은 인별 합계 tabs가 실시간 반영(미리보기=제출과 같은 도메인 호출). 로그인 왕복 draft에 unit·absorberIndex 보존.
+- **근거:** 도메인 한 함수에 옵션만 더해 빠른정산·항목별 공용(단일 출처). 저장은 결과 금액뿐이라 스키마 불변. 흡수자(보통 받는 사람=낸 사람)가 남는 걸 먹으면 친구들은 전원 깔끔 — '내 계좌만' 모델과 자연스럽게 맞음.
+- **검증:** test **58 green**(기존 49 보존 + 신규 9)·build·lint. 무로그인 프리뷰 e2e: 홈(10,000÷3)=100원→"각자 3,300·남은 100"+1인당 박스 숨김, 천원→"각자 3,000·남은 1,000", 흡수자 미선택 제출→검증 에러, 선택 후 제출→로그인 게이트 도달 / 항목별=단위 선택 시 인별 합계 반올림(나 3,400/3,300/3,300 자동→홍길동 흡수 시 3,300/3,300/3,400). **실DB 생성은 로그인 게이트라 폰 스모크 잔여**(도메인 합==amount 보장이라 RPC 경로 불변).
+- **상태:** 확정·검증(라이브 배포 대기). 마이그레이션 없음. 잔여: 로그인 후 반올림 정산 생성→정산결과 금액 폰 스모크.

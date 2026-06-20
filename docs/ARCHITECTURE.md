@@ -50,7 +50,7 @@ payven/
 │  │  │  └─ settle/page.tsx          # 화면4 정산
 │  │  └─ api/cron/cleanup/route.ts   # 머신 트리거 ONLY (Vercel Cron, CRON_SECRET 가드)
 │  ├─ domain/                        # SEAM 1 (순수)
-│  │  ├─ settle.ts  settle.test.ts   # 균등분할(largest-remainder)·순잔액·최소송금(그리디)
+│  │  ├─ settle.ts  settle.test.ts   # 균등분할(largest-remainder, 선택 unit 반올림+흡수자 §ADR-016)·순잔액·최소송금(그리디)
 │  │  ├─ money.ts   money.test.ts    # KRW 정수 파싱/포맷
 │  │  ├─ rules.ts                    # 순수 규칙 (canDeleteMember 등) + 테스트
 │  │  └─ types.ts                    # 도메인 타입 (DB 행과 분리)

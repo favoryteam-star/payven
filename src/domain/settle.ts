@@ -4,21 +4,32 @@ import type {
   MemberId,
   SettlementRecord,
   Share,
+  SplitOptions,
   Transfer,
   Weight,
 } from './types'
 
+// 3번째 인자는 과거 호환을 위해 paidBy 문자열 또는 SplitOptions 둘 다 받는다.
+type SplitArg = MemberId | SplitOptions
+function toOptions(arg?: SplitArg): SplitOptions {
+  return typeof arg === 'string' ? { paidBy: arg } : (arg ?? {})
+}
+
 /**
- * 가중 분할 (largest-remainder / Hamilton).
- * 각자 floor(amount·weight/W), 남는 단위는 정수 나머지 numerator(= amount·weight mod W)가 큰 순으로 1원씩.
- * tie-break(나머지 동률): 낸 사람(paidBy)이 참여자면 먼저 → 멤버 id 오름차순. 결정적, 정수만(부동소수점 0).
- * weight가 전부 1이면 균등(= equalSplit). 예) 10,000 ÷ 3 → 3,334 / 3,333 / 3,333
+ * 가중 분할 (largest-remainder / Hamilton), 단위·흡수자 옵션 지원.
+ * 각자 base = unit의 배수로 내림(amount·weight/(W·unit) 내림 × unit). 남는 금액(leftover)은:
+ *  - absorber가 지정되고 참여자면 → 그 한 명이 전부 흡수(나머지는 전부 unit 배수 = '깔끔한 금액').
+ *  - 아니면 자동: unit 청크를 분수부(rem) 큰 순으로 1개씩(tie: 낸 사람 먼저 → id 오름차순),
+ *    총액이 unit로 안 떨어져 남는 sub-unit(< unit)은 최우선자에게.
+ * 결정적, 정수만(부동소수점 0). unit=1·absorber 없음이면 기존 largest-remainder와 동일.
+ * 예) 10,000 ÷ 3: unit 1 → 3,334/3,333/3,333 · unit 100 → 3,400/3,300/3,300(낸 사람 흡수)
  */
 export function splitByWeights(
   amount: number,
   weights: Weight[],
-  paidBy?: MemberId,
+  arg?: SplitArg,
 ): Share[] {
+  const opts = toOptions(arg)
   assertWon(amount)
   if (amount < 0) throw new Error(`금액은 음수가 될 수 없습니다: ${amount}`)
   const k = weights.length
@@ -32,29 +43,45 @@ export function splitByWeights(
       throw new Error(`가중치는 1 이상의 정수여야 합니다: ${w.weight}`)
     }
   }
+  const unit = opts.unit ?? 1
+  if (!Number.isInteger(unit) || unit < 1) {
+    throw new Error(`단위는 1 이상의 정수여야 합니다: ${unit}`)
+  }
 
   const totalWeight = weights.reduce((s, w) => s + w.weight, 0)
-  // 정수 몫·나머지만으로 비교(부동소수점 금지). 같은 분모 W에서 분수부 비교 = rem 비교.
+  // 정수 몫·나머지만으로 비교(부동소수점 금지). 분모 = W·unit, base = unit의 배수로 내림.
+  const denom = totalWeight * unit
   const rows = weights.map((w) => {
     const product = amount * w.weight
-    return { memberId: w.memberId, base: Math.floor(product / totalWeight), rem: product % totalWeight }
+    const rem = product % denom // 다음 unit까지의 분수부(분모 동일하므로 rem만 비교)
+    return { memberId: w.memberId, base: (product - rem) / totalWeight, rem } // base = floor(product/denom)*unit
   })
   const shares: Share[] = rows.map((r) => ({ memberId: r.memberId, amount: r.base }))
 
-  let leftover = amount - shares.reduce((s, x) => s + x.amount, 0) // 0 .. k-1 단위
-  if (leftover > 0) {
-    const order = [...rows].sort((a, b) => {
-      if (b.rem !== a.rem) return b.rem - a.rem // 분수부 큰 순
-      const aPaid = a.memberId === paidBy ? 0 : 1
-      const bPaid = b.memberId === paidBy ? 0 : 1
-      if (aPaid !== bPaid) return aPaid - bPaid // 낸 사람 먼저
-      return compareId(a.memberId, b.memberId) // 그다음 id 오름차순
-    })
-    const byId = new Map(shares.map((s) => [s.memberId, s]))
-    for (let i = 0; leftover > 0; i++, leftover--) {
-      byId.get(order[i].memberId)!.amount += 1
-    }
+  let leftover = amount - shares.reduce((s, x) => s + x.amount, 0) // 0 .. < k·unit
+  if (leftover <= 0) return shares
+
+  const byId = new Map(shares.map((s) => [s.memberId, s]))
+
+  // absorber 지정(+ 참여자) → 전부 흡수. 나머지는 모두 unit 배수로 깔끔.
+  if (opts.absorber !== undefined && byId.has(opts.absorber)) {
+    byId.get(opts.absorber)!.amount += leftover
+    return shares
   }
+
+  // 자동: unit 청크를 분수부 큰 순으로 분배. tie-break = 낸 사람 먼저 → id 오름차순.
+  const order = [...rows].sort((a, b) => {
+    if (b.rem !== a.rem) return b.rem - a.rem
+    const aPaid = a.memberId === opts.paidBy ? 0 : 1
+    const bPaid = b.memberId === opts.paidBy ? 0 : 1
+    if (aPaid !== bPaid) return aPaid - bPaid
+    return compareId(a.memberId, b.memberId)
+  })
+  for (let i = 0; leftover >= unit; i++, leftover -= unit) {
+    byId.get(order[i].memberId)!.amount += unit
+  }
+  // 총액이 unit로 안 떨어질 때 남는 sub-unit(< unit) → 최우선자(없으면 첫 참여자)
+  if (leftover > 0) byId.get(order[0].memberId)!.amount += leftover
   return shares
 }
 
@@ -65,12 +92,12 @@ export function splitByWeights(
 export function equalSplit(
   amount: number,
   participants: MemberId[],
-  paidBy?: MemberId,
+  arg?: SplitArg,
 ): Share[] {
   return splitByWeights(
     amount,
     participants.map((memberId) => ({ memberId, weight: 1 })),
-    paidBy,
+    arg,
   )
 }
 

@@ -18,6 +18,9 @@ export default function ItemizedPage() {
   const router = useRouter()
   const [members, setMembers] = useState<string[]>(['나', ''])
   const [payerIndex, setPayerIndex] = useState(0)
+  // 반올림 단위(1=안 함) + 남는 금액 받을 사람(원본 members 인덱스, null=미선택). 항목마다 적용.
+  const [unit, setUnit] = useState(1)
+  const [absorberIndex, setAbsorberIndex] = useState<number | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [padItem, setPadItem] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +53,8 @@ export default function ItemizedPage() {
       const d = JSON.parse(raw)
       if (Array.isArray(d.members)) setMembers(d.members)
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
+      if (typeof d.unit === 'number') setUnit(d.unit)
+      if (typeof d.absorberIndex === 'number') setAbsorberIndex(d.absorberIndex)
       if (Array.isArray(d.items)) setItems(d.items)
       if (d.acct && typeof d.acct === 'object') setAcct(d.acct)
       setAutoSubmit(true)
@@ -75,7 +80,10 @@ export default function ItemizedPage() {
   }, [focusMember])
 
   const goLogin = () => {
-    sessionStorage.setItem('payven:draft:items', JSON.stringify({ members, payerIndex, items, acct }))
+    sessionStorage.setItem(
+      'payven:draft:items',
+      JSON.stringify({ members, payerIndex, unit, absorberIndex, items, acct }),
+    )
     window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/items?resume=1')}`
   }
 
@@ -134,15 +142,30 @@ export default function ItemizedPage() {
       }),
     )
 
-  // ── 인별 합계(채워진 멤버 순) ──
+  // ── 인별 합계(채워진 멤버 순) — 단위 반올림·흡수자 반영(미리보기=제출과 동일 도메인 호출) ──
+  const splitOpts = {
+    paidBy: String(effectivePayer),
+    unit,
+    absorber: absorberIndex !== null ? String(absorberIndex) : undefined,
+  }
   const tabs = filledIdx.map(() => 0)
   for (const it of items) {
     if (it.amount <= 0) continue
     const parts = filledIdx.filter((fi) => it.among[fi])
     if (parts.length === 0) continue
-    const shares = equalSplit(it.amount, parts.map(String), String(effectivePayer))
+    const shares = equalSplit(it.amount, parts.map(String), splitOpts)
     const byId = new Map(shares.map((s) => [s.memberId, s.amount]))
     for (const oi of parts) tabs[filledIdx.indexOf(oi)] += byId.get(String(oi)) ?? 0
+  }
+  // 단위로 안 떨어져 남는 금액(항목별 합). 0이면 흡수자 선택 불필요.
+  let roundLeftover = 0
+  if (unit > 1) {
+    for (const it of items) {
+      if (it.amount <= 0) continue
+      const np = filledIdx.filter((fi) => it.among[fi]).length
+      if (np === 0) continue
+      roundLeftover += it.amount - Math.floor(it.amount / (np * unit)) * unit * np
+    }
   }
 
   function submit() {
@@ -163,6 +186,15 @@ export default function ItemizedPage() {
       payload.push({ description: it.name.trim() || undefined, amount: it.amount, participants })
     }
 
+    // 단위로 안 떨어져 남는 금액이 있으면 받을 사람을 골라야(매번 직접 선택). filled 위치로 변환.
+    let absorberIdx: number | undefined
+    if (unit > 1 && roundLeftover > 0) {
+      if (absorberIndex === null) return setError('남은 금액 받을 사람을 골라주세요')
+      const pos = filledIdx.indexOf(absorberIndex)
+      if (pos < 0) return setError('남은 금액 받을 사람을 다시 골라주세요')
+      absorberIdx = pos
+    }
+
     const resolved = resolveAccount(accounts, accountId, acct)
     if (resolved.error) return setError(resolved.error)
     startTransition(async () => {
@@ -170,6 +202,8 @@ export default function ItemizedPage() {
         const res = await addItemizedBillAction({
           members: filled,
           payerIndex: payer,
+          unit,
+          absorberIndex: absorberIdx,
           items: payload,
           account: resolved.account,
           saveAccount: resolved.saveAccount,
@@ -257,6 +291,64 @@ export default function ItemizedPage() {
               </button>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* 금액 단위로 맞추기(선택) — 항목마다 단위로 내림, 남는 건 고른 사람이 흡수. */}
+      {filledIdx.length >= 2 && total > 0 && (
+        <section className="mb-5">
+          <p className="mb-2 text-sm font-medium text-neutral-500">
+            금액 단위로 맞추기 <span className="font-normal text-neutral-400">(선택)</span>
+          </p>
+          <div className="flex gap-2">
+            {[1, 10, 100, 1000].map((u) => (
+              <button
+                key={u}
+                onClick={() => {
+                  setUnit(u)
+                  setAbsorberIndex(null)
+                  setError(null)
+                }}
+                className={
+                  'flex-1 rounded-xl py-2.5 text-sm font-medium transition ' +
+                  (unit === u
+                    ? 'bg-brand text-white'
+                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                }
+              >
+                {u === 1 ? '안 함' : u === 1000 ? '천원' : `${u}원`}
+              </button>
+            ))}
+          </div>
+          {unit > 1 &&
+            (roundLeftover > 0 ? (
+              <div className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
+                <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                  남는 <span className="num font-semibold">{formatWon(roundLeftover)}</span> 누가 낼까요?
+                </p>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {filledIdx.map((fi) => (
+                    <button
+                      key={fi}
+                      onClick={() => {
+                        setAbsorberIndex(fi)
+                        setError(null)
+                      }}
+                      className={
+                        'rounded-full px-4 py-2 text-sm font-medium transition ' +
+                        (absorberIndex === fi
+                          ? 'bg-brand text-white'
+                          : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                      }
+                    >
+                      {members[fi].trim()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-neutral-400">딱 떨어져요 — 남는 금액 없음.</p>
+            ))}
         </section>
       )}
 

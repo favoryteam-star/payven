@@ -15,7 +15,7 @@
 `app(pages/actions) → server → domain` / `lib`·`domain`은 브라우저 안전 / **`'use client'`는 `server/`를 절대 import 안 함.**
 
 ## 하드룰 (절대 어기지 말 것)
-1. **돈은 전부 정수 `원`(KRW, 보조단위 없음). 부동소수점 금지.** 나눗셈 나머지는 largest-remainder(§ARCHITECTURE), tie-break = 낸 사람 우선→멤버 id 오름차순(결정적).
+1. **돈은 전부 정수 `원`(KRW, 보조단위 없음). 부동소수점 금지.** 나눗셈 나머지는 largest-remainder(§ARCHITECTURE), tie-break = 낸 사람 우선→멤버 id 오름차순(결정적). **선택: 단위 반올림**(`splitByWeights` 옵션 `unit`∈{1,10,100,1000}·`absorber`) — base는 unit 배수로 내림, 남는 금액은 흡수자 한 명(없으면 자동). `unit=1`·흡수자 없음 = 기존과 동일([[DECISIONS#ADR-016]]). 합==amount·정수 불변.
 2. **`service_role`/`sb_secret_` 키는 `src/server/db.ts` 단 한 파일에서만** 읽고 클라이언트를 생성한다. **절대 `NEXT_PUBLIC_` 금지.**
 3. **`src/server/` 모든 파일은 1행이 `import 'server-only'`.** 클라이언트가 import하면 빌드 에러여야 한다(규율 아닌 컴파일 보장).
 4. **브라우저에 Supabase 키 0개.** anon/publishable 키도 클라이언트에 두지 않는다(브라우저는 supabase-js를 쓰지 않음).

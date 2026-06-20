@@ -17,6 +17,9 @@ export default function Home() {
   const [padOpen, setPadOpen] = useState(false)
   const [members, setMembers] = useState<string[]>(['나', ''])
   const [payerIndex, setPayerIndex] = useState(0)
+  // 반올림 단위(1=안 함) + 남는 금액 받을 사람(members 인덱스, null=미선택). 단위 바꾸면 다시 고르게.
+  const [unit, setUnit] = useState(1)
+  const [absorberIndex, setAbsorberIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loginPrompt, setLoginPrompt] = useState(false)
   const [autoSubmit, setAutoSubmit] = useState(false)
@@ -48,6 +51,8 @@ export default function Home() {
       if (typeof d.amount === 'number') setAmount(d.amount)
       if (Array.isArray(d.members)) setMembers(d.members)
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
+      if (typeof d.unit === 'number') setUnit(d.unit)
+      if (typeof d.absorberIndex === 'number') setAbsorberIndex(d.absorberIndex)
       if (d.acct && typeof d.acct === 'object') setAcct(d.acct)
       setAutoSubmit(true)
     } catch {
@@ -72,12 +77,18 @@ export default function Home() {
   }, [focusMember])
 
   const goLogin = () => {
-    sessionStorage.setItem('payven:draft:quick', JSON.stringify({ amount, members, payerIndex, acct }))
+    sessionStorage.setItem(
+      'payven:draft:quick',
+      JSON.stringify({ amount, members, payerIndex, unit, absorberIndex, acct }),
+    )
     window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
   }
 
   const filled = members.filter((m) => m.trim())
   const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
+  // 단위 반올림 미리보기(균등이라 base는 전원 동일). 남는 금액(leftover)은 고른 사람이 흡수.
+  const roundBase = unit > 1 && perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
+  const leftover = unit > 1 && perPerson > 0 ? amount - roundBase * filled.length : 0
 
   const setMember = (i: number, v: string) =>
     setMembers((p) => p.map((m, idx) => (idx === i ? v : m)))
@@ -103,6 +114,17 @@ export default function Home() {
     if (names.length < 2) return setError('최소 2명이 필요해요')
     const payerName = trimmed[payerIndex] || names[0]
     const payerIdx = Math.max(0, names.indexOf(payerName))
+    // 단위 반올림 시 남는 금액이 있으면 받을 사람을 골라야(매번 직접 선택). absorberIndex는 names 기준으로 변환.
+    const base = unit > 1 ? Math.floor(amount / (names.length * unit)) * unit : 0
+    const left = unit > 1 ? amount - base * names.length : 0
+    let absorberIdx: number | undefined
+    if (left > 0) {
+      if (absorberIndex === null) return setError('남은 금액 받을 사람을 골라주세요')
+      const absName = trimmed[absorberIndex]
+      const pos = absName ? names.indexOf(absName) : -1
+      if (pos < 0) return setError('남은 금액 받을 사람을 다시 골라주세요')
+      absorberIdx = pos
+    }
     const resolved = resolveAccount(accounts, accountId, acct)
     if (resolved.error) return setError(resolved.error)
     startTransition(async () => {
@@ -111,6 +133,8 @@ export default function Home() {
           amount,
           members: names,
           payerIndex: payerIdx,
+          unit,
+          absorberIndex: absorberIdx,
           account: resolved.account,
           saveAccount: resolved.saveAccount,
         })
@@ -213,6 +237,70 @@ export default function Home() {
         </section>
       )}
 
+      {/* 금액 단위로 맞추기(선택) — 친구들이 3,333 대신 3,300 같은 깔끔한 금액을 보내게. 남는 건 고른 사람이. */}
+      {perPerson > 0 && (
+        <section className="mb-5">
+          <p className="mb-2 text-sm font-medium text-neutral-500">
+            금액 단위로 맞추기 <span className="font-normal text-neutral-400">(선택)</span>
+          </p>
+          <div className="flex gap-2">
+            {[1, 10, 100, 1000].map((u) => (
+              <button
+                key={u}
+                onClick={() => {
+                  setUnit(u)
+                  setAbsorberIndex(null)
+                  setError(null)
+                }}
+                className={
+                  'flex-1 rounded-xl py-2.5 text-sm font-medium transition ' +
+                  (unit === u
+                    ? 'bg-brand text-white'
+                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                }
+              >
+                {u === 1 ? '안 함' : u === 1000 ? '천원' : `${u}원`}
+              </button>
+            ))}
+          </div>
+
+          {unit > 1 &&
+            (leftover > 0 ? (
+              <div className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
+                <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                  각자 <span className="num font-semibold text-brand">{formatWon(roundBase)}</span> · 남은{' '}
+                  <span className="num font-semibold">{formatWon(leftover)}</span> 누가 낼까요?
+                </p>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {members.map((m, i) =>
+                    m.trim() ? (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setAbsorberIndex(i)
+                          setError(null)
+                        }}
+                        className={
+                          'rounded-full px-4 py-2 text-sm font-medium transition ' +
+                          (absorberIndex === i
+                            ? 'bg-brand text-white'
+                            : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                        }
+                      >
+                        {m.trim()}
+                      </button>
+                    ) : null,
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-neutral-400">
+                딱 떨어져요 — 각자 {formatWon(roundBase)}씩.
+              </p>
+            ))}
+        </section>
+      )}
+
       {/* 받을 계좌. 저장계좌 있으면 칩, 없으면 인라인 입력(선택). 정산 결과에서 친구들이 이 계좌로 보냄. */}
       {accounts !== null && (
         <section className="mb-5">
@@ -234,7 +322,7 @@ export default function Home() {
         </section>
       )}
 
-      {perPerson > 0 && (
+      {perPerson > 0 && unit === 1 && (
         <div className="mb-4 rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
           <span className="text-sm text-neutral-500">1인당 </span>
           <span className="num text-lg font-bold text-brand">{formatWon(perPerson)}</span>

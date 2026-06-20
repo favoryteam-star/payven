@@ -55,7 +55,11 @@ export async function createQuickSettle(
 
   // 멤버 순서를 인덱스 id로 써서 equalSplit → 반환 순서 = 멤버 순서
   const indexIds = input.members.map((_, i) => String(i))
-  const shares = equalSplit(input.amount, indexIds, String(input.payerIndex))
+  const shares = equalSplit(input.amount, indexIds, {
+    paidBy: String(input.payerIndex),
+    unit: input.unit,
+    absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
+  })
   const sharesArr = shares.map((s) => s.amount)
 
   const { error } = await supa.rpc('create_quick_settle', {
@@ -88,10 +92,16 @@ export async function addItemizedBill(
   const slug = nanoid(21)
   const memberCount = input.members.length
 
+  // 항목별 단위 반올림: 항목마다 내림 + 전역 흡수자(그 항목 참여자일 때만 적용, 아니면 자동 분배).
+  const splitOpts = {
+    paidBy: String(input.payerIndex),
+    unit: input.unit,
+    absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
+  }
   const items = input.items.map((it): Json => {
     // 참여자 인덱스를 id로 써서 splitByWeights(weight 1) → 반환 순서 = 참여자 순서
     const weights = it.participants.map((idx) => ({ memberId: String(idx), weight: 1 }))
-    const shares = splitByWeights(it.amount, weights, String(input.payerIndex))
+    const shares = splitByWeights(it.amount, weights, splitOpts)
     // 멤버 정렬 정수배열로 펼침(미참여자 0). RPC가 합 == amount 재검증.
     const aligned = Array.from({ length: memberCount }, () => 0)
     for (const s of shares) aligned[Number(s.memberId)] = s.amount

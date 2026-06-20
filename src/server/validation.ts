@@ -35,20 +35,38 @@ export type UpdateAccountInput = z.infer<typeof updateAccountSchema>
 // 삭제/기본지정 등 id만 받는 액션.
 export const accountIdSchema = z.object({ id: z.string().uuid() })
 
+// 반올림 단위(보조단위 없는 정수 원). 1=현행(자동), 10/100/1000=단위로 내림 후 남는 금액 흡수자에게.
+export const roundUnitSchema = z
+  .union([z.literal(1), z.literal(10), z.literal(100), z.literal(1000)])
+  .default(1)
+
 // 빠른정산 입력. 참여자는 새로 만드는 멤버라 이름 중복 허용(각자 다른 id가 됨).
 // 금액은 정수 원, 양수. account=받는 사람(=나) 계좌(선택).
-export const quickSettleSchema = z.object({
-  amount: z.number().int().positive().max(1_000_000_000),
-  description: z.string().trim().max(50).optional(),
-  members: z
-    .array(z.string().trim().min(1, '이름을 입력해 주세요').max(20))
-    .min(2, '최소 2명이 필요합니다')
-    .max(30),
-  payerIndex: z.number().int().min(0),
-  account: accountFieldsSchema.optional(),
-  // 인라인으로 직접 입력한 계좌면 정산 시 내 저장 계좌에 추가(저장 계좌에서 고른 거면 false).
-  saveAccount: z.boolean().optional(),
-})
+export const quickSettleSchema = z
+  .object({
+    amount: z.number().int().positive().max(1_000_000_000),
+    description: z.string().trim().max(50).optional(),
+    members: z
+      .array(z.string().trim().min(1, '이름을 입력해 주세요').max(20))
+      .min(2, '최소 2명이 필요합니다')
+      .max(30),
+    payerIndex: z.number().int().min(0),
+    // 반올림 단위 + 남는 금액 받을 사람(멤버 인덱스). unit>1인데 absorber 없으면 도메인이 자동 분배.
+    unit: roundUnitSchema,
+    absorberIndex: z.number().int().min(0).optional(),
+    account: accountFieldsSchema.optional(),
+    // 인라인으로 직접 입력한 계좌면 정산 시 내 저장 계좌에 추가(저장 계좌에서 고른 거면 false).
+    saveAccount: z.boolean().optional(),
+  })
+  .superRefine((val, ctx) => {
+    const n = val.members.length
+    if (val.payerIndex >= n) {
+      ctx.addIssue({ code: 'custom', message: '낸 사람 인덱스가 범위를 벗어났습니다', path: ['payerIndex'] })
+    }
+    if (val.absorberIndex !== undefined && val.absorberIndex >= n) {
+      ctx.addIssue({ code: 'custom', message: '남는 금액 받을 사람이 범위를 벗어났습니다', path: ['absorberIndex'] })
+    }
+  })
 
 export type QuickSettleInput = z.infer<typeof quickSettleSchema>
 
@@ -79,6 +97,9 @@ export const itemizedBillSchema = z
       )
       .min(1, '항목이 최소 1개 필요합니다')
       .max(50),
+    // 반올림 단위 + 남는 금액 받을 사람(전역 멤버 인덱스). 항목마다 적용, 흡수자 안 낀 항목은 자동.
+    unit: roundUnitSchema,
+    absorberIndex: z.number().int().min(0).optional(),
     account: accountFieldsSchema.optional(),
     saveAccount: z.boolean().optional(),
   })
@@ -86,6 +107,9 @@ export const itemizedBillSchema = z
     const n = val.members.length
     if (val.payerIndex >= n) {
       ctx.addIssue({ code: 'custom', message: '낸 사람 인덱스가 범위를 벗어났습니다', path: ['payerIndex'] })
+    }
+    if (val.absorberIndex !== undefined && val.absorberIndex >= n) {
+      ctx.addIssue({ code: 'custom', message: '남는 금액 받을 사람이 범위를 벗어났습니다', path: ['absorberIndex'] })
     }
     val.items.forEach((it, i) => {
       it.participants.forEach((p, j) => {

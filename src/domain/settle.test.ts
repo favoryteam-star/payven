@@ -141,6 +141,84 @@ describe('splitByWeights', () => {
   })
 })
 
+describe('단위(unit) 반올림 + 남는 금액 흡수자', () => {
+  const w = (memberId: MemberId, weight: number): Weight => ({ memberId, weight })
+
+  it('10,000 ÷ 3, 단위 100 → 각 3,300 + 남은 100(자동: 낸 사람)', () => {
+    const shares = equalSplit(10000, ['a', 'b', 'c'], { unit: 100, paidBy: 'a' })
+    expect(shares.map((s) => s.amount)).toEqual([3400, 3300, 3300])
+    expect(sum(shares.map((s) => s.amount))).toBe(10000)
+  })
+
+  it('10,000 ÷ 3, 단위 1,000 → 각 3,000 + 남은 1,000', () => {
+    const shares = equalSplit(10000, ['a', 'b', 'c'], { unit: 1000, paidBy: 'a' })
+    expect(shares.map((s) => s.amount)).toEqual([4000, 3000, 3000])
+  })
+
+  it('흡수자 지정: 남은 금액 전부 그 사람에게, 나머지는 깔끔', () => {
+    const shares = equalSplit(10000, ['a', 'b', 'c'], { unit: 100, absorber: 'c' })
+    expect(Object.fromEntries(shares.map((s) => [s.memberId, s.amount]))).toEqual({
+      a: 3300,
+      b: 3300,
+      c: 3400,
+    })
+  })
+
+  it('총액이 단위로 안 떨어져도 합 정확 + 비흡수자는 단위 배수(흡수자가 sub-unit 흡수)', () => {
+    const shares = equalSplit(10001, ['a', 'b', 'c'], { unit: 100, absorber: 'c' })
+    const m = Object.fromEntries(shares.map((s) => [s.memberId, s.amount]))
+    expect(m).toEqual({ a: 3300, b: 3300, c: 3401 })
+    expect(sum(shares.map((s) => s.amount))).toBe(10001)
+  })
+
+  it('자동 + 총액이 단위로 안 떨어짐: sub-unit은 최우선자에게', () => {
+    const shares = equalSplit(10001, ['a', 'b', 'c'], { unit: 100, paidBy: 'a' })
+    expect(shares.map((s) => s.amount)).toEqual([3401, 3300, 3300])
+    expect(sum(shares.map((s) => s.amount))).toBe(10001)
+  })
+
+  it('가중 + 단위 + 흡수자: 비흡수자는 단위 배수', () => {
+    const shares = splitByWeights(10000, [w('a', 1), w('b', 2)], { unit: 100, absorber: 'a' })
+    expect(Object.fromEntries(shares.map((s) => [s.memberId, s.amount]))).toEqual({ a: 3400, b: 6600 })
+  })
+
+  it('단위가 총액을 나누면 흡수자도 깔끔(남는 금액 0)', () => {
+    const shares = equalSplit(9000, ['a', 'b', 'c'], { unit: 100, absorber: 'a' })
+    expect(shares.every((s) => s.amount === 3000)).toBe(true)
+  })
+
+  it('잘못된 단위는 throw', () => {
+    expect(() => equalSplit(100, ['a', 'b'], { unit: 0 })).toThrow(/단위/)
+    expect(() => equalSplit(100, ['a', 'b'], { unit: 10.5 })).toThrow(/단위/)
+  })
+
+  it('불변식(흡수자, 300 runs): 합 = amount · 정수·비음수 · 비흡수자는 모두 unit 배수', () => {
+    const UNITS = [1, 10, 100, 1000]
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 1_000_000_000 }),
+        fc.integer({ min: 2, max: 8 }),
+        fc.integer({ min: 0, max: 7 }),
+        fc.integer({ min: 0, max: 3 }),
+        (amount, mCount, absIdx, unitIdx) => {
+          const ids = Array.from({ length: mCount }, (_, i) => `m${i}`)
+          const unit = UNITS[unitIdx]
+          const absorber = ids[absIdx % mCount]
+          const shares = equalSplit(amount, ids, { unit, absorber })
+          expect(sum(shares.map((s) => s.amount))).toBe(amount)
+          for (const s of shares) {
+            expect(Number.isInteger(s.amount)).toBe(true)
+            expect(s.amount).toBeGreaterThanOrEqual(0)
+            // 흡수자만 sub-unit을 가질 수 있고, 나머지는 전부 unit 배수
+            if (s.memberId !== absorber) expect(s.amount % unit).toBe(0)
+          }
+        },
+      ),
+      { numRuns: 300 },
+    )
+  })
+})
+
 describe('netBalances', () => {
   it('a가 9000 내고 셋이 나눔', () => {
     const expenses: ExpenseRecord[] = [
