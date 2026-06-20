@@ -1,18 +1,19 @@
 # 페이븐 — 다음 세션 핸드오프 (2026-06-20)
 
-> 새 세션은 이 파일 + 메모리(자동 로드)부터 읽고 이어서 진행. 결정: **색=그린 확정**. **정체성·M3 항목별·M4 카카오 인증+만들기 게이트 완료·라이브(2026-06-19)**. **받는 사람 저장 계좌(은행/계좌번호/예금주)+토스 버튼+계좌입력 UX 완료·라이브(2026-06-20, 작업 3)** — 인라인 입력·은행 커스텀 드롭다운·숫자만+은행별 하이픈 자동·멤버 엔터 추가. **M5 내역 목록(내가 만든 정산·`owner_id` 재사용) 완료·검증(2026-06-20, 증분 A)** — 내역탭=카드 목록(이름·인원·상대날짜·총액→settle). 다음 = **로그인 스모크(폰: 저장계좌+내역) → 송금완료 기록(증분 B) 또는 구글 로그인**.
+> 새 세션은 이 파일 + 메모리(자동 로드)부터 읽고 이어서 진행. 결정: **색=그린 확정**. **정체성·M3 항목별·M4 카카오 인증+만들기 게이트 완료·라이브(2026-06-19)**. **받는 사람 저장 계좌(은행/계좌번호/예금주)+토스 버튼+계좌입력 UX 완료·라이브(2026-06-20, 작업 3)** — 인라인 입력·은행 커스텀 드롭다운·숫자만+은행별 하이픈 자동·멤버 엔터 추가. **2026-06-20 추가 완료·라이브**: M5 내역 목록(`owner_id` 재사용) · 정산결과 UI 정리(받는계좌 상단 1회·계좌 안잘림·iOS 밑줄제거·공유버튼) · **Vercel 함수 서울(icn1) 이전**(교차리전 느림 해결) · 정산결과 **받는사람 예금주 실명+맥락(웨이브1)**. 다음 = **웨이브 2: 공유 정산 페이지 인터랙티브 보드(개인화 '내 것만 콕' + 보냈어요/완료)** — ▼"다음 세션 시작점" 설계 브리프대로. (폰 스모크 잔여: 카카오 로그인 후 마이 계좌 CRUD·내역 렌더.)
 
 ## 현재 상태 (M0~M3 + M4 카카오 인증·만들기 게이트 완료, 라이브)
 - 라이브(공유용): **`payven-hazel.vercel.app`** (에메랄드 그린). `git push origin main` → Vercel 자동배포.
 - IDs: Supabase project `gtssqmibfhkyffvrkhzy`(서울 icn1) / Vercel project `prj_yppD4l9aEleBsPUmZ8iA3yqXGoNm`, team `team_SyQ2rJNlnFscaz3yop6KIfLb`. 카카오 앱 `1491200`(비즈앱).
 - MCP: **supabase + vercel 둘 다 연결됨**(`.mcp.json`, gitignore). `.env.local`+Vercel env에 URL·service_role·**`SUPABASE_ANON_KEY`(서버전용 anon — NEXT_PUBLIC_ 아님)**.
-- 검증: `npm test`(**41 green**) · `npm run build` · `npm run lint` 통과.
+- 검증: `npm test`(**49 green**) · `npm run build` · `npm run lint` 통과.
 - 코드 지도:
   - `src/domain/` settle(`equalSplit`/`splitByWeights`·netBalances·minimizeCashFlow)·money·rules·types (정산 엔진, 테스트됨)
-  - `src/server/` db(service_role)·**`auth.ts`(@supabase/ssr, anon 서버전용·쿠키 세션)**·queries(createQuickSettle·addItemizedBill RPC+owner_id+계좌, getGroupBySlug, **저장계좌 CRUD `listUserAccounts`/`createUserAccount`/`updateUserAccount`/`deleteUserAccount`/`setDefaultUserAccount`**)·ratelimit·validation(+`accountFieldsSchema`/`saveAccountSchema`/`updateAccountSchema`)·database.types
-  - `src/app/(tabs)/` 홈(숫자패드+**받을계좌선택**)·내역(빈)·마이(로그인/로그아웃+**내 계좌 관리** `_components/AccountManager`) + `g/[slug]/settle`(+**받는사람 계좌·계좌복사·토스송금** `_components/TossButton`) + `items`(항목별+받을계좌) + `auth/{login,callback,logout}` 라우트 + `actions.ts`(+저장계좌 액션 5종·`getMyAccountsAction`) + `src/middleware.ts`(세션갱신·`?code`→콜백 안전망)
+  - `src/server/` db(service_role)·**`auth.ts`(@supabase/ssr, anon 서버전용·쿠키 세션)**·queries(createQuickSettle·addItemizedBill RPC+owner_id+계좌, getGroupBySlug(+`created_at`), **`listGroupsByOwner`(내역 집계)**, **저장계좌 CRUD `listUserAccounts`/`createUserAccount`/`updateUserAccount`/`deleteUserAccount`/`setDefaultUserAccount`**)·ratelimit·validation(+`accountFieldsSchema`/`saveAccountSchema`/`updateAccountSchema`)·database.types
+  - `src/app/(tabs)/` 홈(숫자패드+**받을계좌선택**)·내역(**내 정산 목록** Server Component)·마이(로그인/로그아웃+**내 계좌 관리** `_components/AccountManager`) + `g/[slug]/settle`(+**받는사람 계좌·계좌복사·토스송금** `_components/TossButton`) + `items`(항목별+받을계좌) + `auth/{login,callback,logout}` 라우트 + `actions.ts`(+저장계좌 액션 5종·`getMyAccountsAction`) + `src/middleware.ts`(세션갱신·`?code`→콜백 안전망)
   - `src/components/` Logo·ModeChips·LoginSheet·Numpad·BottomNav·ShareButton·icons·ServiceWorkerRegister·**AccountSelect(`useMyAccounts`훅+`AccountField`[칩/인라인]+`resolveAccount`)**·**BankSelect(커스텀 드롭다운, flip)**
-  - `src/lib/` toss(딥링크)·share·banks·**account(`onlyDigits`/`formatAccountNo` 은행별 하이픈, +test)**
+  - `src/lib/` toss(딥링크)·share·banks·**account(`onlyDigits`/`formatAccountNo` 은행별 하이픈, +test)**·**`datetime`(KST `formatRelativeDay`/`formatMonthDay`, +test)**
+  - 인프라: **`vercel.json` `regions:["icn1"]`**(함수=서울, DB와 동일 리전). 루트 레이아웃 `formatDetection:{telephone:false}`(iOS 밑줄).
   - `supabase/migrations/0001~0008`(init·quick_settle·itemized·group owner_id·rpc owner_id·**user_accounts+members.account_holder**·**rpc 계좌 파라미터**·**기본계좌 원자 RPC `set_default_account`/`delete_account`**)
   - PWA: `app/manifest.ts`·`public/sw.js`(v3, `/auth` 우회)·`public/icon.svg`·`app-icon-{192,256,512}.png`(생성기 `scripts/gen-icon.js`)
 - 디자인 토큰: `tailwind.config.ts` brand = 그린 `#0FA177`. Pretendard, `.num`(tabular-nums), `pb-safe`.
@@ -82,14 +83,33 @@
 - **계좌번호 안 잘림**: 행 내 truncate 제거 → 배너에서 전체 표시(`484602-04-255161`).
 - **iOS 계좌번호 밑줄 제거**: Safari가 계좌번호를 전화번호로 오인해 `tel:` 링크(밑줄)로 만들던 것 → 루트 레이아웃 `formatDetection: { telephone: false }`(메타 `telephone=no`). 프리뷰로 `tel:` 링크 0개 확인.
 - **공유 버튼**: 죽은 `flex-1` 제거 + full-width `py-4` primary로 정리.
+- **(웨이브1, 2026-06-20) 받는사람 실명 + 맥락**: 공유 페이지라 받는 사람을 멤버명('나') 대신 **예금주 실명**으로(`displayName = accountHolder ?? name`). 히어로에 **"{결제자}님이 결제 · {월일}"** 맥락(`getGroupBySlug`에 `created_at` 추가, `lib/datetime.formatMonthDay` KST). 커스텀 그룹명이면 제목(기본 빠른정산/항목별 정산은 숨김). test 49 green·프리뷰 검증.
 
-## ▶ 다음 세션 시작점
-1. **로그인 스모크(폰, 미완)** — 카카오 로그인 후 한 번에: ①마이 계좌 추가/기본지정/수정/삭제 + 만들기 자동채움(인라인 첫 저장→다음엔 칩) + 숫자만/하이픈 + 정산결과 토스 ②**내역탭에 내 정산 목록**(이름·인원·상대날짜·총액, 탭하면 settle). (둘 다 OAuth라 이 세션 자동검증 불가.)
-2. 본인 은행 계좌번호 하이픈이 통장과 다르면 `src/lib/account.ts` `BANK_GROUPS` 보정.
-3. 그다음 택1: **송금완료 기록(M5 증분 B)** = settle "보냈어요"→기존 `settlements` 기록→남은송금 차감·"완료" 배지(공개 링크 write라 withRateLimit+zod 필요) / 또는 **구글 로그인**(M4 잔여, 같은 패턴+인앱웹뷰 폴백).
+## ▶ 다음 세션 시작점 = 웨이브 2 (공유 정산 페이지 인터랙티브 보드)
+정산결과 `/g/[slug]/settle`는 **친구가 읽는 공유 페이지**. 사용자 피드백으로 페이지를 "만든 사람 시점→읽는 친구 시점"으로 개편 중. 웨이브1(받는사람 실명+맥락)까지 **라이브**. 웨이브2 = 사용자가 고른 **개인화 '내 것만 콕' + 보냈어요/완료**. 둘 다 인터랙티브라 **클라 컴포넌트 하나(`SettleBoard`)로 묶어** 설계. **무로그인 페이지라 프리뷰로 실 슬러그 e2e 검증 가능**(아래).
+
+**먼저 읽기:** `src/app/g/[slug]/settle/page.tsx` 현재 구조 — 서버가 이미 `transfers`(pending=`minimizeCashFlow`), `snap.settlements`(완료분, `netBalances`가 이미 차감), `accountMember`(받는 계좌), `displayName`(예금주 실명) 계산함. **page가 계산→plain props로 넘기고 컴포넌트는 필터·렌더만**(CLAUDE.md: 컴포넌트 안에서 settle 재계산 금지).
+
+**설계(확정):**
+- **`SettleBoard`(`'use client'`, settle `_components/`)** — props 예: `{ slug, members:{id,name}[], pending:{from,to,amount,toAcct?}[], done:{id,from,to,amount}[], account:{bankName,accountNo,holder}|null }`. 이름은 page에서 `displayName`으로 미리 해석해 넘김.
+  - **신원 선택(개인화)**: `localStorage['payven:me:'+slug]` → 내 멤버 id. 없으면 "이 정산에서 당신은?" 멤버 칩 → 선택 저장. "내가 아니에요" 리셋.
+  - **내 차례 히어로**: 내가 debtor(=`transfer.from`)면 "**{받는사람}에게 {금액} 보내면 끝**" 큰 카드 + 토스/계좌복사 + **보냈어요**. 내가 받는 사람이면 "받을 차례 — 총 {합}" + 누가 보냈는지. 아래 **"전체 보기"** 토글로 기존 pending/done 리스트.
+- **보냈어요/완료(settlements write — 공개 링크 write라 하드룰6: `withRateLimit`+zod 필수):**
+  - `server/queries.recordSettlement(slug, fromId, toId, amount)`: slug→group, from/to가 그 그룹 멤버인지 검증 후 `settlements` insert. 가드 `amount>0`(+선택: from 미결제 net ≥ amount).
+  - `markSentAction`(withRateLimit+zod `markSentSchema`) → recordSettlement → `revalidatePath('/g/'+slug+'/settle')`.
+  - **취소**: `undoSettlementAction(slug, settlementId)` → 본인 그룹 settlement 삭제 → revalidate. **→ `getGroupBySlug`의 settlements select에 `id` 추가**, 표시용 타입 `SettledTransfer{id,from,to,amount}`(단 `netBalances`엔 여전히 `{from,to,amount}`만 전달 — 도메인 불변).
+  - **완료 섹션**: pending("이렇게 보내면") + "보낸 송금 ✓"(done, [취소]). 전부 done이면 기존 "딱 맞췄어요"(`transfers.length===0`)로 자연 수렴.
+  - 남은 송금 차감은 **기존 netBalances/minimizeCashFlow 그대로**(settlements가 이미 net에 반영됨). '내 계좌만'은 각 debtor 독립이라 재페어링 안정.
+- **검증(무로그인 프리뷰 e2e):** 슬러그 `beLVTdnLqgAWK5ELGa_aI`(나=받는쪽, 계좌 있음·배너 뜸) / `TRA3QaBe3-SIDUkepIMqQ`(나=채무자, 배너 안뜸). 신원선택→내차례 히어로→보냈어요→완료섹션→취소 왕복 + build/lint/test + 실DB로 settlements insert/delete 확인.
+- 완료 후 **[[DECISIONS#ADR-015]]**(공유 페이지 개인화+송금완료) 작성 + 이 핸드오프 갱신.
+
+### 그 외 잔여(웨이브2와 별개)
+- **폰 스모크(미완, OAuth라 자동검증 불가)**: 카카오 로그인 후 ①마이 계좌 CRUD·만들기 자동채움(인라인 첫 저장→칩) ②내역탭 내 정산 목록 렌더.
+- 본인 은행 계좌번호 하이픈이 통장과 다르면 `src/lib/account.ts` `BANK_GROUPS` 보정.
+- **맥락 문구 피드백**: "{결제자}님이 결제 · {월일}" 표현 사용자 확인 대기(쉽게 변경).
 
 ## 이후 마일스톤
-M5 잔여(송금완료 기록·그룹 지속/이름 편집) → M6 운영(레이트리밋·리전·정리·키롤).
+웨이브2(개인화+송금완료) → 구글 로그인(M4 잔여)·그룹 지속/이름 편집 → M6 운영(레이트리밋 활성+프로덕션 가드·키롤·정리).
 
 ## 운영 주의
 - Vercel 무료 = **동시 빌드 1개**. 빌드 멈추면 큐 막힘 → Deployments에서 멈춘 배포 **Cancel**(또는 빈 커밋 재트리거).
