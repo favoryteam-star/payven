@@ -43,6 +43,7 @@ export function SettleBoard({
   done,
   account,
   accountMemberId,
+  canManageAll,
 }: {
   slug: string
   members: Member[]
@@ -50,6 +51,8 @@ export function SettleBoard({
   done: Done[]
   account: Account | null
   accountMemberId: string | null
+  /** 전체 관리(누구의 보냈어요/취소든) 권한 — 주최자(로그인) 또는 owner 없는 옛 정산. 친구면 false. */
+  canManageAll: boolean
 }) {
   const router = useRouter()
   const storageKey = `payven:me:${slug}`
@@ -104,48 +107,7 @@ export function SettleBoard({
   const allSettled = pending.length === 0
   const accountIsReceiver = !!accountMemberId && pending.some((t) => t.to === accountMemberId)
 
-  // 내 관점 분해(개인화)
-  const myOut = me ? pending.filter((t) => t.from === me.id) : []
-  const myIn = me ? pending.filter((t) => t.to === me.id) : []
-  const iReceived = me ? done.filter((d) => d.to === me.id) : []
-  const inSum = myIn.reduce((s, t) => s + t.amount, 0)
-  const receivedSum = iReceived.reduce((s, d) => s + d.amount, 0)
-
-  // ── 조각들 ──────────────────────────────────────────────────────
-  const identityPrompt = (
-    <div className="mb-5 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-      <p className="mb-3 text-sm font-semibold">이 정산에서 당신은 누구예요?</p>
-      <div className="flex flex-wrap gap-2">
-        {members.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => pick(m.id)}
-            className="rounded-full border border-neutral-200 px-4 py-2 text-sm font-medium transition hover:border-brand hover:text-brand dark:border-neutral-700"
-          >
-            {m.name}
-          </button>
-        ))}
-      </div>
-      <p className="mt-2.5 text-xs text-neutral-400">고르면 내가 보낼(받을) 것만 콕 집어 보여줘요</p>
-    </div>
-  )
-
-  const identityBar = me && (
-    <div className="mb-4 flex items-center justify-between">
-      <p className="text-sm text-neutral-500">
-        나: <span className="font-semibold text-neutral-800 dark:text-neutral-100">{me.name}</span>
-      </p>
-      <button
-        type="button"
-        onClick={() => pick(null)}
-        className="text-xs text-neutral-400 underline-offset-2 hover:underline"
-      >
-        내가 아니에요
-      </button>
-    </div>
-  )
-
+  // ── 공용 조각 ───────────────────────────────────────────────────
   const checkCard = (
     <div className="mb-4 flex flex-col items-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50 px-6 py-12 text-center dark:border-neutral-800 dark:bg-neutral-900">
       <span className="pv-pop flex h-16 w-16 items-center justify-center rounded-full bg-brand text-white">
@@ -158,97 +120,8 @@ export function SettleBoard({
     </div>
   )
 
-  // 내가 채무자: 보낼 송금 큰 카드(보통 1건) + 토스/복사 + 보냈어요
-  const debtorHero = (
-    <div className="mb-4 flex flex-col gap-4">
-      {myOut.map((t, i) => {
-        const toAcct = t.to === accountMemberId && account ? account : null
-        return (
-          <div
-            key={i}
-            className="rounded-3xl border border-brand/25 bg-brand/5 p-5 dark:border-brand/30 dark:bg-brand/10"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand">내 차례</p>
-            <p className="mt-2 text-[17px]">
-              <span className="font-bold">{nameOf(t.to)}</span>님에게
-            </p>
-            <p className="num text-4xl font-extrabold tracking-tight">{formatWon(t.amount)}</p>
-            <p className="mt-0.5 text-sm text-neutral-500">보내면 끝나요</p>
-
-            {toAcct && (
-              <div className="mt-3 rounded-2xl bg-white/70 px-4 py-3 dark:bg-neutral-900/50">
-                <p className="num text-[15px] font-semibold tracking-tight">
-                  <span className="text-neutral-500">{toAcct.bankName}</span>{' '}
-                  {formatAccountNo(toAcct.bankName, toAcct.accountNo)}
-                </p>
-                {toAcct.holder && (
-                  <p className="mt-0.5 text-xs text-neutral-400">예금주 {toAcct.holder}</p>
-                )}
-              </div>
-            )}
-
-            <div className="mt-4 flex flex-col gap-2">
-              {toAcct && (
-                <div className="flex gap-2">
-                  <CopyButton value={toAcct.accountNo} label="계좌 복사" />
-                  <TossButton
-                    bankName={toAcct.bankName}
-                    accountNo={toAcct.accountNo}
-                    amount={t.amount}
-                  />
-                </div>
-              )}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => markSent(t)}
-                className="w-full rounded-2xl bg-brand py-3.5 text-[15px] font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
-              >
-                {busy ? '기록 중…' : '보냈어요'}
-              </button>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-
-  // 내가 받는 사람: 받을 합계 + 누가 보냈는지(대기/받음)
-  const creditorHero = (
-    <div className="mb-4 rounded-3xl border border-brand/25 bg-brand/5 p-5 dark:border-brand/30 dark:bg-brand/10">
-      <p className="text-xs font-semibold uppercase tracking-wide text-brand">받을 차례</p>
-      <p className="num mt-2 text-4xl font-extrabold tracking-tight">{formatWon(inSum)}</p>
-      <p className="mt-0.5 text-sm text-neutral-500">
-        받을 금액{receivedSum > 0 ? ` · ${formatWon(receivedSum)} 받음` : ''}
-      </p>
-      <ul className="mt-3 flex flex-col gap-1.5">
-        {myIn.map((t, i) => (
-          <li key={`p${i}`} className="flex items-center justify-between text-sm">
-            <span className="font-medium">{nameOf(t.from)}</span>
-            <span className="num text-neutral-500">{formatWon(t.amount)} · 대기</span>
-          </li>
-        ))}
-        {iReceived.map((d) => (
-          <li key={d.id} className="flex items-center justify-between text-sm text-neutral-400">
-            <span>{nameOf(d.from)}</span>
-            <span className="num">{formatWon(d.amount)} · 받음 ✓</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-
-  const nothingHero = me && (
-    <div className="mb-4 rounded-2xl border border-neutral-100 bg-neutral-50 p-5 text-center dark:border-neutral-800 dark:bg-neutral-900">
-      <p className="text-[15px] font-semibold">정산할 게 없어요</p>
-      <p className="mt-1 text-sm text-neutral-500">{me.name}님은 보낼 것도 받을 것도 없어요.</p>
-    </div>
-  )
-
-  const hero = myOut.length > 0 ? debtorHero : myIn.length > 0 ? creditorHero : nothingHero
-
-  // 전체 보기: 받는 계좌 배너 + 남은 송금 + 보낸 송금(취소)
-  const fullList = (
+  /** 전체 현황. canAct=true면 모든 행에 보냈어요/취소(주최자·관리권한). false면 읽기 전용(친구). */
+  const fullBoard = (canAct: boolean) => (
     <>
       {accountIsReceiver && account && (
         <div className="mb-4">
@@ -277,23 +150,25 @@ export function SettleBoard({
                       {formatWon(t.amount)}
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {toAcct && (
-                      <TossButton
-                        bankName={toAcct.bankName}
-                        accountNo={toAcct.accountNo}
-                        amount={t.amount}
-                      />
-                    )}
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => markSent(t)}
-                      className="shrink-0 rounded-lg border border-brand/30 px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-brand/5 disabled:opacity-50"
-                    >
-                      보냈어요
-                    </button>
-                  </div>
+                  {canAct && (
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {toAcct && (
+                        <TossButton
+                          bankName={toAcct.bankName}
+                          accountNo={toAcct.accountNo}
+                          amount={t.amount}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => markSent(t)}
+                        className="shrink-0 rounded-lg border border-brand/30 px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-brand/5 disabled:opacity-50"
+                      >
+                        보냈어요
+                      </button>
+                    </div>
+                  )}
                 </li>
               )
             })}
@@ -316,14 +191,16 @@ export function SettleBoard({
                   <span className="font-medium">{nameOf(d.to)}</span>
                   <span className="num ml-2 text-neutral-500">{formatWon(d.amount)}</span>
                 </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => undo(d)}
-                  className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-neutral-400 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300"
-                >
-                  취소
-                </button>
+                {canAct && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => undo(d)}
+                    className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-neutral-400 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300"
+                  >
+                    취소
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -332,29 +209,194 @@ export function SettleBoard({
     </>
   )
 
-  return (
-    <div>
-      {me ? identityBar : !allSettled && identityPrompt}
+  // ── 모드 1: 전체 관리(주최자/owner 없는 옛 정산) ────────────────────
+  // 신원 선택 없이 전체 현황을 보고 누구의 송금이든 표시·취소. 보통 받는 사람(=만든 사람).
+  if (canManageAll) {
+    return (
+      <div>
+        <p className="mb-3 text-xs text-neutral-400">정산 관리 · 받은 송금을 표시하거나 되돌릴 수 있어요</p>
+        {allSettled && checkCard}
+        {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
+        {fullBoard(true)}
+      </div>
+    )
+  }
 
-      {allSettled && checkCard}
-      {me && !allSettled && hero}
+  // ── 신원 선택 UI(친구 모드) ─────────────────────────────────────
+  const identityPrompt = (
+    <div className="mb-5 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
+      <p className="mb-3 text-sm font-semibold">이 정산에서 당신은 누구예요?</p>
+      <div className="flex flex-wrap gap-2">
+        {members.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => pick(m.id)}
+            className="rounded-full border border-neutral-200 px-4 py-2 text-sm font-medium transition hover:border-brand hover:text-brand dark:border-neutral-700"
+          >
+            {m.name}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2.5 text-xs text-neutral-400">고르면 내가 보낼(받을) 것만 콕 집어 보여줘요</p>
+    </div>
+  )
 
-      {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
+  // 모드 2: 친구, 신원 없음 → 신원 선택 + 전체 현황(읽기 전용)
+  if (!me) {
+    return (
+      <div>
+        {allSettled && checkCard}
+        {identityPrompt}
+        {fullBoard(false)}
+      </div>
+    )
+  }
 
-      {me && !allSettled ? (
-        <div className="mt-1">
+  // ── 모드 3: 친구, 신원 선택됨 → 내 송금만 관리 ──────────────────────
+  const identityBar = (
+    <div className="mb-4 flex items-center justify-between">
+      <p className="text-sm text-neutral-500">
+        나: <span className="font-semibold text-neutral-800 dark:text-neutral-100">{me.name}</span>
+      </p>
+      <button
+        type="button"
+        onClick={() => pick(null)}
+        className="text-xs text-neutral-400 underline-offset-2 hover:underline"
+      >
+        내가 아니에요
+      </button>
+    </div>
+  )
+
+  const myPendingOut = pending.filter((t) => t.from === me.id) // 보낼 것(보냈어요)
+  const mySentOut = done.filter((d) => d.from === me.id) // 보낸 것(취소 가능)
+  const myIn = pending.filter((t) => t.to === me.id) // 받을 것(대기)
+  const myReceived = done.filter((d) => d.to === me.id) // 받은 것
+  const inSum = myIn.reduce((s, t) => s + t.amount, 0)
+  const receivedSum = myReceived.reduce((s, d) => s + d.amount, 0)
+  const hasOut = myPendingOut.length > 0 || mySentOut.length > 0
+  const hasIn = myIn.length > 0 || myReceived.length > 0
+
+  const mine = hasOut ? (
+    <div className="mb-4 flex flex-col gap-3">
+      {myPendingOut.map((t, i) => {
+        const toAcct = t.to === accountMemberId && account ? account : null
+        return (
+          <div
+            key={`po${i}`}
+            className="rounded-3xl border border-brand/25 bg-brand/5 p-5 dark:border-brand/30 dark:bg-brand/10"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand">내 차례</p>
+            <p className="mt-2 text-[17px]">
+              <span className="font-bold">{nameOf(t.to)}</span>님에게
+            </p>
+            <p className="num text-4xl font-extrabold tracking-tight">{formatWon(t.amount)}</p>
+            <p className="mt-0.5 text-sm text-neutral-500">보내면 끝나요</p>
+
+            {toAcct && (
+              <div className="mt-3 rounded-2xl bg-white/70 px-4 py-3 dark:bg-neutral-900/50">
+                <p className="num text-[15px] font-semibold tracking-tight">
+                  <span className="text-neutral-500">{toAcct.bankName}</span>{' '}
+                  {formatAccountNo(toAcct.bankName, toAcct.accountNo)}
+                </p>
+                {toAcct.holder && (
+                  <p className="mt-0.5 text-xs text-neutral-400">예금주 {toAcct.holder}</p>
+                )}
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-col gap-2">
+              {toAcct && (
+                <div className="flex gap-2">
+                  <CopyButton value={toAcct.accountNo} label="계좌 복사" />
+                  <TossButton bankName={toAcct.bankName} accountNo={toAcct.accountNo} amount={t.amount} />
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => markSent(t)}
+                className="w-full rounded-2xl bg-brand py-3.5 text-[15px] font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+              >
+                {busy ? '기록 중…' : '보냈어요'}
+              </button>
+            </div>
+          </div>
+        )
+      })}
+
+      {mySentOut.map((d) => (
+        <div
+          key={d.id}
+          className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3.5 dark:border-neutral-700 dark:bg-neutral-900"
+        >
+          <div className="min-w-0">
+            <p className="text-[15px]">
+              <span className="font-semibold">{nameOf(d.to)}</span>님에게
+            </p>
+            <p className="num mt-0.5 text-lg font-bold">
+              {formatWon(d.amount)}{' '}
+              <span className="text-sm font-semibold text-brand">✓ 보냈어요</span>
+            </p>
+          </div>
           <button
             type="button"
-            onClick={() => setShowAll((v) => !v)}
-            className="text-sm font-medium text-neutral-400 underline-offset-2 hover:underline"
+            disabled={busy}
+            onClick={() => undo(d)}
+            className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-neutral-400 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300"
           >
-            {showAll ? '전체 닫기' : '전체 보기'}
+            취소
           </button>
-          {showAll && <div className="mt-3">{fullList}</div>}
         </div>
-      ) : (
-        fullList
-      )}
+      ))}
+    </div>
+  ) : hasIn ? (
+    <div className="mb-4 rounded-3xl border border-brand/25 bg-brand/5 p-5 dark:border-brand/30 dark:bg-brand/10">
+      <p className="text-xs font-semibold uppercase tracking-wide text-brand">받을 차례</p>
+      <p className="num mt-2 text-4xl font-extrabold tracking-tight">{formatWon(inSum)}</p>
+      <p className="mt-0.5 text-sm text-neutral-500">
+        받을 금액{receivedSum > 0 ? ` · ${formatWon(receivedSum)} 받음` : ''}
+      </p>
+      <ul className="mt-3 flex flex-col gap-1.5">
+        {myIn.map((t, i) => (
+          <li key={`pi${i}`} className="flex items-center justify-between text-sm">
+            <span className="font-medium">{nameOf(t.from)}</span>
+            <span className="num text-neutral-500">{formatWon(t.amount)} · 대기</span>
+          </li>
+        ))}
+        {myReceived.map((d) => (
+          <li key={d.id} className="flex items-center justify-between text-sm text-neutral-400">
+            <span>{nameOf(d.from)}</span>
+            <span className="num">{formatWon(d.amount)} · 받음 ✓</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : allSettled ? (
+    checkCard
+  ) : (
+    <div className="mb-4 rounded-2xl border border-neutral-100 bg-neutral-50 p-5 text-center dark:border-neutral-800 dark:bg-neutral-900">
+      <p className="text-[15px] font-semibold">정산할 게 없어요</p>
+      <p className="mt-1 text-sm text-neutral-500">{me.name}님은 보낼 것도 받을 것도 없어요.</p>
+    </div>
+  )
+
+  return (
+    <div>
+      {identityBar}
+      {mine}
+      {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
+      <div className="mt-1">
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="text-sm font-medium text-neutral-400 underline-offset-2 hover:underline"
+        >
+          {showAll ? '전체 닫기' : '전체 보기'}
+        </button>
+        {showAll && <div className="mt-3">{fullBoard(false)}</div>}
+      </div>
     </div>
   )
 }

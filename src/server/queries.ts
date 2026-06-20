@@ -38,7 +38,7 @@ export interface SettledTransfer {
 }
 
 export interface GroupSnapshot {
-  group: { id: string; slug: string; name: string; kind: string; createdAt: string }
+  group: { id: string; slug: string; name: string; kind: string; createdAt: string; ownerId: string | null }
   members: SnapshotMember[]
   expenses: ExpenseRecord[]
   settlements: SettlementRecord[] // 도메인 입력(netBalances) — id 없음(도메인 불변)
@@ -129,7 +129,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
 
   const { data: group, error: gErr } = await supa
     .from('groups')
-    .select('id, slug, name, kind, created_at')
+    .select('id, slug, name, kind, created_at, owner_id')
     .eq('slug', slug)
     .maybeSingle()
   if (gErr) throw new Error(gErr.message)
@@ -179,7 +179,14 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
   }))
 
   return {
-    group: { id: group.id, slug: group.slug, name: group.name, kind: group.kind, createdAt: group.created_at },
+    group: {
+      id: group.id,
+      slug: group.slug,
+      name: group.name,
+      kind: group.kind,
+      createdAt: group.created_at,
+      ownerId: group.owner_id,
+    },
     members: (membersRes.data ?? []).map((m) => ({
       id: m.id,
       name: m.name,

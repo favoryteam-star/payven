@@ -92,8 +92,9 @@
 - **내 차례 히어로**: 채무자=" {받는사람}님에게 {금액} 보내면 끝" + 계좌(받는사람=계좌주인 행만 inline)·토스/복사 + **보냈어요** / 받는사람="받을 차례 총 {합}" + 대기·받음 목록 / 둘 다 아니면 "정산할 게 없어요". 아래 **전체 보기** 토글로 기존 pending/done 리스트.
 - **송금완료(공개 링크 write → 하드룰6 `withRateLimit`+zod):** `recordSettlement`/`markSentAction`(insert)·`undoSettlement`/`undoSettlementAction`(그 그룹 settlement만 delete). 둘 다 `revalidatePath`+클라 `router.refresh()`. **net 가드**(`fromOwes≥amount && toOwed≥amount`)로 과다기록·역방향 차단(중복 클릭 시 "이미 정산됐어요"). 전부 done이면 "딱 맞췄어요"로 자연 수렴. 남은 송금 차감은 기존 `minimizeCashFlow` 그대로(settlements가 이미 net 반영).
 - **표시 타입 분리**: `getGroupBySlug` settlements select에 `id` 추가 → `SettledTransfer{id,from,to,amount}`(취소용). `netBalances`엔 여전히 `SettlementRecord{from,to,amount}`만(도메인 불변).
-- **검증**: test 49 green·lint·build(`/g/[slug]/settle` ƒ Dynamic). 무로그인 프리뷰 e2e(`beLVTdnLqgAWK5ELGa_aI`): 신원없음→김철수(채무자 히어로)→보냈어요(실DB insert 확인)→차감·"정산할 게 없어요"→done [취소]→취소(실DB delete 확인)→복원→나희진(받을 차례 33,333+대기)→둘 다 보냈어요→"딱 맞췄어요"→취소로 0건 복구. **주의:** dev에서 이전 세션 PWA SW(`payven-shell-v3`)가 옛 청크 서빙 → "Cannot read … 'call'" 에러 → SW 해제+캐시 삭제로 해결, **SW 캐시 v4로 올림**(프로덕션은 콘텐츠 해시라 안전).
-- **잔여(수동)**: 폰 스모크 — 실기기에서 localStorage 신원 저장/리셋·토스 딥링크·보냈어요/취소 왕복.
+- **권한 — 주최자 vs 친구(사용자 결정, 2026-06-20 추가):** '전체 관리'(누구의 보냈어요/취소든)는 **정산을 연 사람만**. page가 `getAuthUser()`↔`group.owner_id` 비교(`canManageAll = !ownerId || user.id===ownerId`, `getGroupBySlug`에 `owner_id`→`ownerId` 추가). **주최자(또는 owner 없는 옛 정산)** = 신원 선택 없이 "정산 관리" 보드에서 전체 행 보냈어요/취소. **친구** = 신원 골라 자기 송금만(보낼것=보냈어요·보낸것=취소) + 전체 보기 읽기 전용. 친구 신원(localStorage)은 검증 불가 → '자기 것만'은 **UI 가드**(서버는 net 가드로 계산 안전만 보장); 주최자만 로그인으로 진짜 잠금. 무로그인 viewing 유지(친구 로그인 0).
+- **검증**: test 49 green·lint·build(`/g/[slug]/settle` ƒ Dynamic). 무로그인 프리뷰 e2e: ⓐ친구 모드(owner 있는 `beLVTdnLqgAWK5ELGa_aI`)=신원없음→**전체 목록 읽기 전용**→김철수 선택(본인 보냈어요)→보냈어요(실DB insert)→본인 "✓ 보냈어요 [취소]"→취소(실DB delete)→복원, 전체 보기 버튼 0개 확인 ⓑ관리 모드(owner 없는 `ocY-D7NpoysmeAdVIuc-G`)=신원없이 "정산 관리"+전체 행 보냈어요/취소→실DB insert/delete. 양쪽 0건 복구. **주의:** dev에서 이전 세션 PWA SW(`payven-shell-v3`)가 옛 청크 서빙 → "Cannot read … 'call'" 에러 → SW 해제+캐시 삭제로 해결, **SW 캐시 v4로 올림**(프로덕션은 콘텐츠 해시라 안전).
+- **잔여(수동)**: 폰 스모크 — **주최자 로그인 시 관리 모드** 렌더(owner 없는 그룹과 동일 경로라 코드 신뢰 높음)·실기기 localStorage 신원·토스 딥링크·보냈어요/취소 왕복.
 
 ## ▶ 다음 세션 시작점 = 폰 스모크 누적분 → 구글 로그인 또는 그룹 지속
 웨이브2까지 **라이브 가능 상태**(배포 후). OAuth·실기기 의존이라 자동검증 불가했던 **누적 폰 스모크**를 먼저 정리하는 걸 권장, 그다음 새 기능.
