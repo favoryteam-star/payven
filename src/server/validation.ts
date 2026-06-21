@@ -51,6 +51,7 @@ export const eventDateSchema = z
 export const quickSettleSchema = z
   .object({
     amount: z.number().int().positive().max(1_000_000_000),
+    name: z.string().trim().max(50).optional(), // 정산 제목(그룹명). 없으면 '빠른정산'.
     description: z.string().trim().max(50).optional(),
     members: z
       .array(z.string().trim().min(1, '이름을 입력해 주세요').max(20))

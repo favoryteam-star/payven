@@ -21,12 +21,16 @@ function todayYmd(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// 모드별 기본 제목. 정산결과는 이 기본값이면 제목 숨김(직접 바꾸면 표시).
+const TITLES: Record<SettleMode, string> = { quick: '빠른정산', items: '항목별 정산' }
+
 // 1/N과 항목별을 한 페이지에서 토글로(페이지 이동 X). 헤더·하단탭·공유입력(멤버·낸사람·단위·계좌)은
 // 그대로 두고, 맨 위 입력칸만 바뀐다: 1/N = 금액, 항목별 = 항목.
 export default function Home() {
   const router = useRouter()
   const [mode, setMode] = useState<SettleMode>('quick')
   // 공유 입력
+  const [title, setTitle] = useState<string>(TITLES.quick) // 정산 제목(기본=모드명, 수정 가능)
   const [members, setMembers] = useState<string[]>(['나', ''])
   const [payerIndex, setPayerIndex] = useState(0)
   const [unit, setUnit] = useState(1) // 반올림 단위(1=안 함)
@@ -82,6 +86,7 @@ export default function Home() {
     try {
       const d = JSON.parse(raw)
       if (d.mode === 'quick' || d.mode === 'items') setMode(d.mode)
+      if (typeof d.title === 'string') setTitle(d.title)
       if (typeof d.amount === 'number') setAmount(d.amount)
       if (Array.isArray(d.members)) setMembers(d.members)
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
@@ -115,7 +120,7 @@ export default function Home() {
   const goLogin = () => {
     sessionStorage.setItem(
       'payven:draft:create',
-      JSON.stringify({ mode, amount, members, payerIndex, unit, absorberIndex, eventDate, items, acct }),
+      JSON.stringify({ mode, title, amount, members, payerIndex, unit, absorberIndex, eventDate, items, acct }),
     )
     window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
   }
@@ -215,6 +220,12 @@ export default function Home() {
       }),
     )
 
+  // 모드 전환. 제목이 아직 기본값(또는 빈칸)이면 새 모드 기본값으로 바꾸고, 직접 고친 제목은 유지.
+  const switchMode = (m: SettleMode) => {
+    setTitle((t) => (t.trim() === '' || t === TITLES.quick || t === TITLES.items ? TITLES[m] : t))
+    setMode(m)
+  }
+
   function submit() {
     setError(null)
     const names = filledIdx.map((i) => members[i].trim())
@@ -256,6 +267,7 @@ export default function Home() {
           mode === 'quick'
             ? await quickSettleAction({
                 amount,
+                name: title.trim() || TITLES.quick,
                 members: names,
                 payerIndex: payer,
                 unit,
@@ -265,6 +277,7 @@ export default function Home() {
                 saveAccount: resolved.saveAccount,
               })
             : await addItemizedBillAction({
+                name: title.trim() || TITLES.items,
                 members: names,
                 payerIndex: payer,
                 unit,
@@ -300,7 +313,16 @@ export default function Home() {
         <p className="mt-1.5 text-sm text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
       </header>
 
-      <ModeChips value={mode} onChange={setMode} className="mb-6" />
+      <ModeChips value={mode} onChange={switchMode} className="mb-4" />
+
+      {/* 제목 (공유) — 기본=모드명, 수정 가능. 기본값 그대로면 정산결과에서 제목 숨김. */}
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="제목"
+        maxLength={50}
+        className="mb-4 w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] font-medium outline-none focus:border-brand dark:border-neutral-700"
+      />
 
       {/* 맨 위 입력 — 1/N은 금액, 항목별은 항목(나머지 섹션은 공유) */}
       {mode === 'quick' ? (

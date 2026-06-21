@@ -80,7 +80,7 @@ export async function createQuickSettle(
 
   const { error } = await supa.rpc('create_quick_settle', {
     p_slug: slug,
-    p_name: '빠른정산',
+    p_name: input.name?.trim() || '빠른정산',
     p_member_names: input.members,
     p_amount: input.amount,
     p_paid_by_index: input.payerIndex,
