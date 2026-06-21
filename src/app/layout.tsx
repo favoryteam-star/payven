@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#ffffff',
+  themeColor: '#0a0a0a', // 기본 다크 — 토글 시 ThemeToggle이 meta theme-color도 갱신
   width: 'device-width',
   initialScale: 1,
   // maximumScale 고정 안 함 — 저시력 사용자가 계좌번호·금액을 핀치 줌으로 키워 볼 수 있게(WCAG 1.4.4).
@@ -33,8 +33,15 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ko">
+    <html lang="ko" className="dark" suppressHydrationWarning>
       <body className="bg-neutral-50 font-sans text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-50">
+        {/* 페인트 전 테마 적용(FOUC 방지). 기본 다크 — 저장값이 'light'일 때만 라이트로. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('payven:theme');document.documentElement.classList.toggle('dark',t!=='light')}catch(e){}})()",
+          }}
+        />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendard-variable.min.css"

@@ -2,6 +2,7 @@ import type { Config } from 'tailwindcss'
 
 export default {
   content: ['./src/**/*.{ts,tsx}'],
+  darkMode: 'class', // html.dark 클래스로 제어(토글) — 기본 다크는 layout이 깔아줌
   theme: {
     extend: {
       fontFamily: {

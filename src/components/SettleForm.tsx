@@ -17,6 +17,7 @@ import { IcoBack, IcoPlus } from '@/components/icons'
 import { Wordmark } from '@/components/Logo'
 import { ModeChips, type SettleMode } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { AccountField, EMPTY_INLINE, NEW_ACCOUNT, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 
 // 메뉴(항목) 1개. among = 멤버 길이의 참여 여부(기본 전원).
@@ -477,11 +478,14 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
           <h1 className="text-xl font-bold tracking-tight">정산 수정</h1>
         </header>
       ) : (
-        <header className="mb-4">
-          <h1>
-            <Wordmark />
-          </h1>
-          <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
+        <header className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1>
+              <Wordmark />
+            </h1>
+            <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
+          </div>
+          <ThemeToggle />
         </header>
       )}
 
