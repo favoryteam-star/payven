@@ -106,6 +106,7 @@ export type Database = {
         Row: {
           base_currency: string
           created_at: string
+          event_date: string | null
           id: string
           kind: string
           name: string
@@ -115,6 +116,7 @@ export type Database = {
         Insert: {
           base_currency?: string
           created_at?: string
+          event_date?: string | null
           id?: string
           kind?: string
           name: string
@@ -124,6 +126,7 @@ export type Database = {
         Update: {
           base_currency?: string
           created_at?: string
+          event_date?: string | null
           id?: string
           kind?: string
           name?: string

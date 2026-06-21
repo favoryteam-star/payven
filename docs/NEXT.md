@@ -14,7 +14,7 @@
   - `src/components/` Logo·ModeChips·LoginSheet·Numpad·BottomNav·ShareButton·icons·ServiceWorkerRegister·**AccountSelect(`useMyAccounts`훅+`AccountField`[칩/인라인]+`resolveAccount`)**·**BankSelect(커스텀 드롭다운, flip)**
   - `src/lib/` toss(딥링크)·share·banks·**account(`onlyDigits`/`formatAccountNo` 은행별 하이픈, +test)**·**`datetime`(KST `formatRelativeDay`/`formatMonthDay`, +test)**
   - 인프라: **`vercel.json` `regions:["icn1"]`**(함수=서울, DB와 동일 리전). 루트 레이아웃 `formatDetection:{telephone:false}`(iOS 밑줄).
-  - `supabase/migrations/0001~0008`(init·quick_settle·itemized·group owner_id·rpc owner_id·**user_accounts+members.account_holder**·**rpc 계좌 파라미터**·**기본계좌 원자 RPC `set_default_account`/`delete_account`**)
+  - `supabase/migrations/0001~0009`(init·quick_settle·itemized·group owner_id·rpc owner_id·**user_accounts+members.account_holder**·**rpc 계좌 파라미터**·**기본계좌 원자 RPC `set_default_account`/`delete_account`**·**`groups.event_date`(정산 날짜)**)
   - PWA: `app/manifest.ts`·`public/sw.js`(v3, `/auth` 우회)·`public/icon.svg`·`app-icon-{192,256,512}.png`(생성기 `scripts/gen-icon.js`)
 - 디자인 토큰: `tailwind.config.ts` brand = 그린 `#0FA177`. Pretendard, `.num`(tabular-nums), `pb-safe`.
 
@@ -116,6 +116,11 @@
 - **두 페이지 중복 코드 한 곳으로**(멤버·낸사람·계좌·단위·엔터이동·로그인 복원). 도메인·서버·검증·스키마 변경 0.
 - **검증**: build·lint·test 58 + 프리뷰 e2e(토글 시 `/` 유지·헤더 고정·1/N 금액 위·항목별 항목 위·**멤버/금액 보존**·1/N 흡수자→정산→로그인 게이트·`/items`→`/`). **주의:** dev 떠 있는 채 `npm run build` 돌리면 `.next` 충돌로 dev 500(코드 무관)→dev 재시작+`.next` 삭제로 복구.
 - **금액 키보드 입력 추가(2026-06-21, 사용자 피드백):** 금액 숫자패드(`Numpad`)가 터치 버튼만 받아 데스크톱에서 타이핑 불가 → **열려 있을 때 물리 키보드도 받음**(숫자=입력·Backspace=지움·Enter/Esc=닫기). `window` keydown 리스너(열렸을 때만), 다른 입력칸 포커스 시엔 안 가로챔(`e.target` 가드). 훅은 early-return 앞으로. 홈·항목별 금액 공용(같은 컴포넌트). 프리뷰로 타이핑/백스페이스/Enter 확인.
+
+## ✅ 정산 날짜 선택(기본 오늘·수정 가능) (완료·검증 2026-06-21)
+사용자 피드백: 정산결과 "{결제자}님이 결제 · {월일}"이 생성 시각 고정 → 날짜 고를 수 있게(기본 오늘). 상세 [[DECISIONS#ADR-019]].
+- **`groups.event_date date`(nullable, 0009)** — `created_at`(생성 시각·정렬용)과 분리. 정산결과 표시는 `event_date ?? created_at`(옛 행 폴백). **RPC 미수정**(생성 직후 베스트에포트 `update`). UI=`<input type="date">`(기본 오늘=마운트 후 클라 로컬 set·네이티브 피커+키보드), 검증 `eventDateSchema`(YYYY-MM-DD), draft 보존.
+- **검증**: build·lint·test 58 + 프리뷰(기본 오늘·수정 가능·**실DB event_date 세팅→정산결과 "6월 15일" 표시→null 복구**). 잔여: 로그인 후 생성→날짜 저장 폰 스모크. 내역탭 상대날짜는 created_at 유지(범위 밖).
 
 ## ▶ 다음 세션 시작점 = 폰 스모크 누적분 → 구글 로그인 또는 그룹 지속
 웨이브2까지 **라이브 가능 상태**(배포 후). OAuth·실기기 의존이라 자동검증 불가했던 **누적 폰 스모크**를 먼저 정리하는 걸 권장, 그다음 새 기능.

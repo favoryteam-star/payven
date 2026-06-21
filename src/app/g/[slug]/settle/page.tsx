@@ -51,7 +51,8 @@ export default async function SettlePage({ params }: Params) {
   // 맥락: 누가 결제했는지 + 언제. 기본 이름은 제목으로 안 보여줌(빠른정산/항목별 정산).
   const payerIds = [...new Set(snap.expenses.map((e) => e.paidBy))]
   const payerLabel = payerIds.length === 1 ? displayName(payerIds[0]) : payerIds.length > 1 ? '여러 명' : null
-  const dateLabel = formatMonthDay(snap.group.createdAt)
+  // 사용자가 고른 정산 날짜(있으면) → 없으면 생성 시각으로 폴백. formatMonthDay는 'YYYY-MM-DD'도 처리.
+  const dateLabel = formatMonthDay(snap.group.eventDate ?? snap.group.createdAt)
   const customName = ['빠른정산', '항목별 정산'].includes(snap.group.name) ? null : snap.group.name
 
   // 보드에 넘길 plain props(이름은 미리 displayName으로 해석). 컴포넌트는 필터·렌더만.

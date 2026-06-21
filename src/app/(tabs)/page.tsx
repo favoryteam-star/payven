@@ -15,6 +15,12 @@ import { AccountField, EMPTY_INLINE, resolveAccount, useMyAccounts, type InlineA
 // 항목(메뉴) 1개. among = 멤버 배열과 같은 길이의 참여 여부(기본 전원).
 type Item = { name: string; amount: number; among: boolean[] }
 
+// 오늘(기기 로컬=KST) YYYY-MM-DD. SSR(UTC) 불일치 피하려 마운트 후 set.
+function todayYmd(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 // 1/N과 항목별을 한 페이지에서 토글로(페이지 이동 X). 헤더·하단탭·공유입력(멤버·낸사람·단위·계좌)은
 // 그대로 두고, 맨 위 입력칸만 바뀐다: 1/N = 금액, 항목별 = 항목.
 export default function Home() {
@@ -25,6 +31,7 @@ export default function Home() {
   const [payerIndex, setPayerIndex] = useState(0)
   const [unit, setUnit] = useState(1) // 반올림 단위(1=안 함)
   const [absorberIndex, setAbsorberIndex] = useState<number | null>(null) // 남는 금액 받을 사람(members 인덱스)
+  const [eventDate, setEventDate] = useState('') // 정산 날짜(YYYY-MM-DD). 마운트 시 오늘로 채움(수정 가능).
   // 1/N 전용
   const [amount, setAmount] = useState(0)
   const [padOpen, setPadOpen] = useState(false)
@@ -54,6 +61,7 @@ export default function Home() {
   // ?resume=1은 OAuth 리다이렉트(Supabase Site URL 폴백 → 미들웨어 ?code 라우팅)에서 사라질 수 있어
   // 신뢰 못 함. sessionStorage draft 존재 자체를 복원 신호로 쓴다(같은 탭이라 왕복에도 살아남음).
   useEffect(() => {
+    setEventDate(todayYmd()) // 기본 = 오늘(클라 로컬). draft 있으면 아래에서 덮어씀.
     const params = new URLSearchParams(window.location.search)
     if (params.get('resume') === '1') window.history.replaceState(null, '', '/')
     const raw = sessionStorage.getItem('payven:draft:create')
@@ -67,6 +75,7 @@ export default function Home() {
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
       if (typeof d.unit === 'number') setUnit(d.unit)
       if (typeof d.absorberIndex === 'number') setAbsorberIndex(d.absorberIndex)
+      if (typeof d.eventDate === 'string') setEventDate(d.eventDate)
       if (Array.isArray(d.items)) setItems(d.items)
       if (d.acct && typeof d.acct === 'object') setAcct(d.acct)
       setAutoSubmit(true)
@@ -94,7 +103,7 @@ export default function Home() {
   const goLogin = () => {
     sessionStorage.setItem(
       'payven:draft:create',
-      JSON.stringify({ mode, amount, members, payerIndex, unit, absorberIndex, items, acct }),
+      JSON.stringify({ mode, amount, members, payerIndex, unit, absorberIndex, eventDate, items, acct }),
     )
     window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
   }
@@ -226,6 +235,7 @@ export default function Home() {
                 payerIndex: payer,
                 unit,
                 absorberIndex: absorberIdx,
+                eventDate: eventDate || undefined,
                 account: resolved.account,
                 saveAccount: resolved.saveAccount,
               })
@@ -234,6 +244,7 @@ export default function Home() {
                 payerIndex: payer,
                 unit,
                 absorberIndex: absorberIdx,
+                eventDate: eventDate || undefined,
                 items: payload,
                 account: resolved.account,
                 saveAccount: resolved.saveAccount,
@@ -395,6 +406,17 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      {/* 날짜 (공유) — 기본 오늘, 수정 가능. 정산결과 "{결제자}님이 결제 · {월일}"에 쓰임. */}
+      <section className="mb-5">
+        <p className="mb-2 text-sm font-medium text-neutral-500">언제 썼어요?</p>
+        <input
+          type="date"
+          value={eventDate}
+          onChange={(e) => setEventDate(e.target.value)}
+          className="num w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] outline-none focus:border-brand dark:border-neutral-700 dark:[color-scheme:dark]"
+        />
+      </section>
 
       {/* 금액 단위로 맞추기 (공유) — 친구들이 3,333 대신 3,300 같은 깔끔한 금액을 보내게. 남는 건 고른 사람이. */}
       {showUnit && (

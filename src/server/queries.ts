@@ -38,11 +38,27 @@ export interface SettledTransfer {
 }
 
 export interface GroupSnapshot {
-  group: { id: string; slug: string; name: string; kind: string; createdAt: string; ownerId: string | null }
+  group: {
+    id: string
+    slug: string
+    name: string
+    kind: string
+    createdAt: string
+    ownerId: string | null
+    eventDate: string | null // 사용자가 고른 정산 날짜(YYYY-MM-DD). 없으면 표시는 createdAt 폴백.
+  }
   members: SnapshotMember[]
   expenses: ExpenseRecord[]
   settlements: SettlementRecord[] // 도메인 입력(netBalances) — id 없음(도메인 불변)
   settledTransfers: SettledTransfer[] // 화면 표시·취소용 — id 있음
+}
+
+/** 정산 날짜(event_date)를 RPC가 만든 그룹에 베스트에포트 부착. 실패해도 정산은 유지(표시는 created_at 폴백). */
+async function setEventDate(slug: string, eventDate: string | undefined): Promise<void> {
+  if (!eventDate) return
+  const supa = getAdminClient()
+  const { error } = await supa.from('groups').update({ event_date: eventDate }).eq('slug', slug)
+  if (error) console.error('event_date 설정 실패(무시):', error.message)
 }
 
 /** 빠른정산: 임시그룹+멤버+지출+분담을 RPC로 원자적 생성. 분담은 도메인에서 계산. ownerId=로그인 사용자. */
@@ -77,6 +93,7 @@ export async function createQuickSettle(
     p_acct_holder: input.account?.accountHolder,
   })
   if (error) throw new Error(`빠른정산 생성 실패: ${error.message}`)
+  await setEventDate(slug, input.eventDate)
   return { slug }
 }
 
@@ -130,6 +147,7 @@ export async function addItemizedBill(
     p_acct_holder: input.account?.accountHolder,
   })
   if (error) throw new Error(`항목별 정산 생성 실패: ${error.message}`)
+  await setEventDate(slug, input.eventDate)
   return { slug }
 }
 
@@ -139,7 +157,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
 
   const { data: group, error: gErr } = await supa
     .from('groups')
-    .select('id, slug, name, kind, created_at, owner_id')
+    .select('id, slug, name, kind, created_at, owner_id, event_date')
     .eq('slug', slug)
     .maybeSingle()
   if (gErr) throw new Error(gErr.message)
@@ -196,6 +214,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
       kind: group.kind,
       createdAt: group.created_at,
       ownerId: group.owner_id,
+      eventDate: group.event_date,
     },
     members: (membersRes.data ?? []).map((m) => ({
       id: m.id,
