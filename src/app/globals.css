@@ -16,6 +16,13 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* iOS Safari: input[type=date] 값이 가운데 정렬 + 시스템 기본 폰트로 떠서 다른 입력칸과 안 맞던 것 →
+   왼쪽 정렬 + 입력칸 폰트 상속(15px)으로 통일. (데스크톱은 ::-webkit-datetime-edit라 영향 없음) */
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+  font-size: inherit;
+}
+
 @layer utilities {
   /* 숫자는 항상 고정폭 — 입력/애니메이션 중 자릿수가 안 흔들림 */
   .num {
