@@ -42,6 +42,13 @@ function todayYmd(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// 'YYYY-MM-DD' → 'YYYY. M. D.'. 네이티브 date 값 렌더(iOS에서 크기·정렬 제멋대로)를 안 쓰고 직접 그림.
+function formatDateDisplay(ymd: string): string {
+  const [y, m, d] = ymd.split('-')
+  if (!y || !m || !d) return ymd
+  return `${y}. ${Number(m)}. ${Number(d)}.`
+}
+
 // 모드별 기본 제목. 정산결과는 이 기본값이면 제목 숨김(직접 바꾸면 표시).
 const TITLES: Record<SettleMode, string> = { quick: '빠른정산', items: '항목별 정산' }
 
@@ -544,15 +551,27 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         </section>
       )}
 
-      {/* 날짜 (공유) — 기본 오늘, 수정 가능. 정산결과 "{결제자}님이 결제 · {월일}"에 쓰임. */}
+      {/* 날짜 (공유) — 기본 오늘, 수정 가능. 정산결과 "{결제자}님이 결제 · {월일}"에 쓰임.
+          네이티브 date 값 렌더는 iOS에서 크기·정렬이 제멋대로라, 값은 우리가 직접 그리고(다른 입력칸과 동일)
+          투명 input을 위에 겹쳐 피커만 담당시킨다(데스크톱·iOS 동일하게 보임). */}
       <section className="mb-5">
         <p className="mb-2 text-sm font-medium text-neutral-500">언제 썼어요?</p>
-        <input
-          type="date"
-          value={eventDate}
-          onChange={(e) => setEventDate(e.target.value)}
-          className="num w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] outline-none focus:border-brand dark:border-neutral-700 dark:[color-scheme:dark]"
-        />
+        <div className="relative">
+          <input
+            type="date"
+            value={eventDate}
+            onChange={(e) => setEventDate(e.target.value)}
+            aria-label="정산 날짜"
+            className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0 dark:[color-scheme:dark]"
+          />
+          <div className="num w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] peer-focus:border-brand dark:border-neutral-700">
+            {eventDate ? (
+              formatDateDisplay(eventDate)
+            ) : (
+              <span className="text-neutral-400">날짜 선택</span>
+            )}
+          </div>
+        </div>
       </section>
 
       {/* 금액 단위로 맞추기 (공유) — 친구들이 3,333 대신 3,300 같은 깔끔한 금액을 보내게. 남는 건 고른 사람이. */}
