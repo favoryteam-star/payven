@@ -76,14 +76,25 @@ export default async function SettlePage({ params }: Params) {
 
       {/* 히어로(요약) */}
       <section className="mb-7 mt-5 text-center">
-        {customName && (
-          <p className="mb-1 text-base font-semibold tracking-tight">{customName}</p>
+        {/* 제목 있으면 제목이 히어로(1인당은 요약 줄로), 없으면 1인당이 히어로 */}
+        {customName ? (
+          <>
+            <h1 className="text-3xl font-bold tracking-tight">{customName}</h1>
+            <p className="mt-1.5 text-sm text-neutral-400">
+              총 <span className="num font-medium text-neutral-600 dark:text-neutral-300">{formatWon(total)}</span> ·{' '}
+              {memberIds.length}명 · 1인당{' '}
+              <span className="num font-medium text-neutral-600 dark:text-neutral-300">{formatWon(perPerson)}</span>
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-neutral-400">
+              총 <span className="num font-medium text-neutral-600 dark:text-neutral-300">{formatWon(total)}</span> ·{' '}
+              {memberIds.length}명
+            </p>
+            <div className="num mt-1 text-4xl font-bold tracking-tight">1인당 {formatWon(perPerson)}</div>
+          </>
         )}
-        <p className="text-sm text-neutral-400">
-          총 <span className="num font-medium text-neutral-600 dark:text-neutral-300">{formatWon(total)}</span> ·{' '}
-          {memberIds.length}명
-        </p>
-        <div className="num mt-1 text-4xl font-bold tracking-tight">1인당 {formatWon(perPerson)}</div>
         {(payerLabel || dateLabel) && (
           <p className="mt-2 text-sm text-neutral-400">
             {payerLabel && `${payerLabel}님이 결제`}
