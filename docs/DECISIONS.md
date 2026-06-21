@@ -144,6 +144,7 @@
 - **근거:** nullable 컬럼이라 안전(데이터 마이그레이션 0·테이블 grant가 새 컬럼 커버·RLS 테이블 단위라 무영향). RPC 시그니처를 안 건드려(DROP/재생성·재grant 회피) post-update로 — 날짜는 표시용·폴백 있어 비원자성 허용. `formatMonthDay`는 'YYYY-MM-DD'(UTC 자정+9h=같은 날)·full ISO 둘 다 처리해 유틸 추가 0.
 - **검증:** build·lint·test 58. 프리뷰: 날짜 필드 기본=오늘(2026-06-21)·수정 가능(2026-06-15), **실DB로 event_date 세팅→정산결과 "나희진님이 결제 · 6월 15일"(created_at 6/20 아님) 확인→null 복구**. 컬럼 카탈로그 확인(date, nullable). **잔여:** 로그인 후 실제 생성→날짜 저장 폰 스모크. 내역탭 상대날짜는 `created_at` 유지(생성 recency, 범위 밖).
 - **상태:** 확정·검증(라이브 배포 대기). 마이그레이션 0009 적용(원격+repo 파일). database.types 갱신.
+- **후속(2026-06-21, UI 렌더): 날짜 표시 = 커스텀(네이티브 값 렌더 안 씀).** 사용자 제보 "날짜 칸 크기·정렬이 다른 입력칸과 안 맞고 이상함". 원인: iOS Safari `input[type=date]` 값(`::-webkit-date-and-time-value`)이 가운데 정렬+시스템 폰트라 통제 불가(CSS로 left/inherit 줘도 안 맞았음). **해결: 값은 직접 그리고**(`SettleForm`에서 `formatDateDisplay` → "YYYY. M. D." div, 다른 입력칸과 동일 클래스 15px·왼쪽·px-4 py-3), **투명 네이티브 input(`absolute inset-0 opacity-0`)을 위에 겹쳐 피커만**(`peer-focus`로 보더). 데스크톱·iOS 동일 렌더. 프리뷰로 computed style 동일(15px·start·16px·49px)+날짜 변경→표시 갱신 검증. **주의: 이 패턴을 네이티브 직접 렌더로 '단순화'하면 iOS 버그 재발.** 커밋 6bc3fb0(앞선 236b3dc의 `::-webkit-date-and-time-value` CSS 시도는 불충분해 대체·제거).
 
 ### ADR-020 — 참여자 '최근 같이 정산한 사람' 빠른 추가 ★
 - **맥락(사용자 피드백 2026-06-21):** 매번 참여자 이름을 타이핑하는 게 번거로움 → 과거 정산에서 쓴 이름을 칩으로 띄워 탭 한 번에 추가.
