@@ -215,11 +215,11 @@
 - **구조:** GroupSnapshot에 표시 전용 `rounds`(SnapshotRound{payer, items{description, amount, participants}})·`isItemized` 추가. 차수 묶음 = `getEditableGroup`의 (bill_id, paid_by) 그룹핑·첫등장 순서 차용([[ADR-025]]). **도메인 ExpenseRecord 불변**. page.tsx(서버 컴포넌트)가 `displayName`(예금주 실명 우선)으로 이름 해석한 plain props로 변환, 새 `'use client'` **SettleDetails**는 펼침/접기 상태만(기본 접힘, SettleBoard `showAll` 패턴) 들고 렌더만(settle/잔액 재계산 0). 위치 = 보드(액션) 아래·공유 버튼 위(맥락).
 - **노출:** **항목별(isItemized)만** 상세보기 표시. 빠른정산은 히어로/보드가 이미 총액·인원·낸 사람을 다 보여줘 숨김. 자리 1개뿐이면 '1차' 라벨 생략. 메뉴명 빈값('항목')은 placeholder 폴백. 멤버명은 보드가 이미 쓰는 displayName이라 **추가 PII 0**(계좌번호·실명 자체는 상세에 안 넣음 — 받는계좌 카드는 보드 소관).
 - **검증:** tsc·lint·test 58·build green + 프리뷰(실 항목별 슬러그 `-RAKXZkd32_UC0NEMRi3H`: 1차 음식 20,000[나·김철수·홍길동]/술 30,000[나·홍길동·긴환욱] · 2차 음식 30,000[나·김철수·홍길동]/술 20,000[나·김철수·긴환욱]·참여 칩·합계 정확 / 빠른정산 슬러그는 상세보기 안 뜸=회귀 0 / 콘솔 0). **이해(3렌즈 워크플로)→설계** 후 구현. (실DB 직접 조회는 분류기가 막아 사용자가 공유 링크 제공.)
-- **상태:** 확정·라이브(`849012d`).
+- **상태:** 확정·라이브(`849012d`). **후속(`60eeab0`):** 참여 칩을 이름만 → **이름 + 분담액**(예: 긴환욱 6,666원)으로. `SnapshotRoundItem.participants` string[]→{id,amount}[](expense_shares 분담액 그대로 사용), '전원' 압축 제거(각자 금액 표시), 흡수자(+1~2원)도 정확.
 
 ### ADR-028 — 다크/라이트 토글 + 기본 다크(Tailwind `media`→`class`)
 - **맥락(사용자 2026-06-22):** 홈 상단 우측에 다크모드 스위치, 기본은 다크.
 - **변경:** Tailwind `darkMode: 'class'`(전엔 미설정=`media`=OS prefers-color-scheme 따라감). **기본 다크** = `layout`이 `<html className="dark" suppressHydrationWarning>` 시드 + **FOUC 방지 인라인 스크립트**(페인트 전 `localStorage['payven:theme']`가 `'light'`일 때만 dark 제거, 그 외=다크). `globals.css`의 `color-scheme`를 `.dark`로 제어(네이티브 컨트롤 일치). `themeColor` 다크(`#0a0a0a`). **ThemeToggle**(신규 `'use client'`, 홈 헤더 우측): 전환 대상 아이콘(다크=해/라이트=달), 클릭 시 `html.dark` 토글 + `localStorage` 저장 + `<meta theme-color>` 갱신, 마운트 전엔 빈 버튼(하이드레이트 불일치 회피). `IcoSun`/`IcoMoon` 추가, 홈 헤더를 flex(좌 워드마크·우 토글).
 - **주의:** `media`→`class` 전환으로 **light-OS 사용자도 이제 기본 다크**(의도). 토글은 홈에만 노출하나 선택은 `html`+localStorage라 전역 지속. `suppressHydrationWarning`(html)로 SSR `dark`↔스크립트 변경 불일치 경고 억제(next-themes 패턴). FOUC 0(기본 다크 SSR + 스크립트가 light만 사전 적용).
 - **검증:** tsc·lint·test 58·build green + 프리뷰(기본 다크 `html.dark`·bg `#0a0a0a` / 토글→라이트 bg `#fafafa`·`color-scheme:light`·meta `#ffffff`·localStorage `'light'` / 새로고침 지속 / **하이드레이션 경고 0·FOUC 0** / 아이콘 해↔달 스왑·aria 갱신 / 콘솔 0).
-- **상태:** 확정·라이브(`9e6fe9c`).
+- **상태:** 확정·라이브(`9e6fe9c`). **후속(`60eeab0`):** 마이 탭에도 설정 스위치 — 홈 아이콘 토글에 더해 마이 탭 "화면 · 다크 모드" 스위치 행(로그인/비로그인 공통). `ThemeToggle`을 `useTheme` 훅으로 추출해 `ThemeToggle`(아이콘)·`ThemeSwitch`(스위치)가 같은 html.dark/localStorage 상태 공유. 스위치 ON=다크, 마운트 전 중립(비활성)=하이드레이트 안전.
