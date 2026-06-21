@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { getAuthUser } from '@/server/auth'
 import { listGroupsByOwner } from '@/server/queries'
 import { formatWon } from '@/domain/money'
 import { formatRelativeDay } from '@/lib/datetime'
 import { IcoList } from '@/components/icons'
+import { HistoryCard } from './_components/HistoryCard'
 
 // 내역 탭 — 서버 컴포넌트로 세션을 읽어 내가 만든 정산을 최신순으로. 읽기는 queries 직접 호출(ADR-006).
 export default async function HistoryPage() {
@@ -47,22 +47,13 @@ export default async function HistoryPage() {
       ) : (
         <ul className="flex flex-col gap-2">
           {settlements.map((s) => (
-            <li key={s.slug}>
-              <Link
-                href={`/g/${s.slug}/settle`}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-100 bg-white px-4 py-3.5 transition active:scale-[0.99] dark:border-neutral-800 dark:bg-neutral-900"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-[15px] font-semibold">{s.name}</p>
-                  <p className="num mt-0.5 text-sm text-neutral-400">
-                    {s.memberCount}명 · {formatRelativeDay(s.createdAt, now)}
-                  </p>
-                </div>
-                <div className="num shrink-0 text-[15px] font-bold tracking-tight">
-                  {formatWon(s.total)}
-                </div>
-              </Link>
-            </li>
+            <HistoryCard
+              key={s.slug}
+              slug={s.slug}
+              name={s.name}
+              metaLabel={`${s.memberCount}명 · ${formatRelativeDay(s.createdAt, now)}`}
+              totalLabel={formatWon(s.total)}
+            />
           ))}
         </ul>
       )}

@@ -10,6 +10,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -299,6 +301,35 @@ export type Database = {
       set_default_account: {
         Args: { p_id: string; p_user: string }
         Returns: undefined
+      }
+      update_itemized_bill: {
+        Args: {
+          p_acct_bank?: string
+          p_acct_holder?: string
+          p_acct_no?: string
+          p_items: Json
+          p_member_names: string[]
+          p_name: string
+          p_owner_id: string
+          p_slug: string
+        }
+        Returns: string
+      }
+      update_quick_settle: {
+        Args: {
+          p_acct_bank?: string
+          p_acct_holder?: string
+          p_acct_no?: string
+          p_amount: number
+          p_description: string
+          p_member_names: string[]
+          p_name: string
+          p_owner_id: string
+          p_paid_by_index: number
+          p_shares: number[]
+          p_slug: string
+        }
+        Returns: string
       }
     }
     Enums: {

@@ -4,24 +4,30 @@ import { revalidatePath } from 'next/cache'
 import { withRateLimit } from '@/server/ratelimit'
 import {
   accountIdSchema,
+  deleteGroupSchema,
   itemizedBillSchema,
   markSentSchema,
   quickSettleSchema,
   saveAccountSchema,
   undoSettlementSchema,
   updateAccountSchema,
+  updateItemizedBillSchema,
+  updateQuickSettleSchema,
   type AccountFields,
 } from '@/server/validation'
 import {
   addItemizedBill,
   createQuickSettle,
   createUserAccount,
+  deleteGroup,
   deleteUserAccount,
   listRecentMemberNames,
   listUserAccounts,
   recordSettlement,
   setDefaultUserAccount,
   undoSettlement,
+  updateItemizedBill,
+  updateQuickSettle,
   updateUserAccount,
   type SavedAccount,
 } from '@/server/queries'
@@ -65,6 +71,44 @@ export const addItemizedBillAction = withRateLimit(async (raw: unknown): Promise
   const result = await addItemizedBill(input, user.id)
   await maybeSaveAccount(user.id, input.account, input.saveAccount)
   return result
+})
+
+// ── 내역 수정/삭제(로그인 필수, 소유자 본인만) ─────────────────────
+// 수정=교체 RPC가 owner 가드(p_owner_id ↔ groups.owner_id), 삭제=owner_id 스코프 delete.
+// 보기는 무로그인이라 이 액션들도 공개 엔드포인트 → withRateLimit + zod 필수(하드룰 6).
+// 성공 시 그 정산 페이지 + 내역 목록 revalidate. 세션 만료 시 needLogin(폼이 로그인으로).
+type DeleteResult = { ok: true } | { ok: false; needLogin?: true; error?: string }
+
+export const updateQuickSettleAction = withRateLimit(async (raw: unknown): Promise<CreateResult> => {
+  const user = await getAuthUser()
+  if (!user) return { needLogin: true }
+  const input = updateQuickSettleSchema.parse(raw)
+  const result = await updateQuickSettle(input, user.id)
+  await maybeSaveAccount(user.id, input.account, input.saveAccount)
+  revalidatePath(`/g/${input.slug}/settle`)
+  revalidatePath('/history')
+  return result
+})
+
+export const updateItemizedBillAction = withRateLimit(async (raw: unknown): Promise<CreateResult> => {
+  const user = await getAuthUser()
+  if (!user) return { needLogin: true }
+  const input = updateItemizedBillSchema.parse(raw)
+  const result = await updateItemizedBill(input, user.id)
+  await maybeSaveAccount(user.id, input.account, input.saveAccount)
+  revalidatePath(`/g/${input.slug}/settle`)
+  revalidatePath('/history')
+  return result
+})
+
+export const deleteGroupAction = withRateLimit(async (raw: unknown): Promise<DeleteResult> => {
+  const user = await getAuthUser()
+  if (!user) return { ok: false, needLogin: true }
+  const { slug } = deleteGroupSchema.parse(raw)
+  const res = await deleteGroup(user.id, slug)
+  if (!res.ok) return { ok: false, error: '삭제하지 못했어요' }
+  revalidatePath('/history')
+  return { ok: true }
 })
 
 // ── 저장 계좌(받는 사람 계좌) ──────────────────────────────────────

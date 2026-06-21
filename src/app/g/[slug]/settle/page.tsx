@@ -6,7 +6,6 @@ import { formatWon } from '@/domain/money'
 import { formatMonthDay } from '@/lib/datetime'
 import { minimizeCashFlow, netBalances } from '@/domain/settle'
 import { getGroupBySlug } from '@/server/queries'
-import { getAuthUser } from '@/server/auth'
 import { ShareButton } from '@/components/ShareButton'
 import { IcoBack } from '@/components/icons'
 import { SettleBoard } from './_components/SettleBoard'
@@ -30,11 +29,6 @@ export default async function SettlePage({ params }: Params) {
   const snap = await loadGroup(slug)
   if (!snap) notFound()
 
-  // 전체 관리(누구의 보냈어요/취소든)는 '정산을 연 사람'만 — 로그인 + owner_id 일치로 확인.
-  // 친구(링크 공유받은 사람)는 신원만 고르고 자기 것만 관리. owner 없는 옛 정산은 막을 대상이 없어 누구나(현행).
-  const user = await getAuthUser()
-  const canManageAll = !snap.group.ownerId || (!!user && user.id === snap.group.ownerId)
-
   const memberIds = snap.members.map((m) => m.id)
   const memberById = new Map(snap.members.map((m) => [m.id, m]))
   // 공유 페이지는 친구가 읽음 — 받는 사람은 예금주 실명으로 보여줌(멤버명이 '나'여도 누군지 명확).
@@ -45,7 +39,6 @@ export default async function SettlePage({ params }: Params) {
   const net = netBalances(memberIds, snap.expenses, snap.settlements)
   const transfers = minimizeCashFlow(net)
   const total = snap.expenses.reduce((sum, e) => sum + e.amount, 0)
-  const perPerson = memberIds.length > 0 ? Math.floor(total / memberIds.length) : 0
   // '내 계좌만' 모델 — 계좌는 최대 한 명(보통 '나')에게만 붙음.
   const accountMember = snap.members.find((m) => m.bankName && m.accountNo) ?? null
   // 맥락: 누가 결제했는지 + 언제. 기본 이름은 제목으로 안 보여줌(빠른정산/항목별 정산).
@@ -74,25 +67,21 @@ export default async function SettlePage({ params }: Params) {
         <IcoBack className="h-5 w-5" /> 새 정산
       </Link>
 
-      {/* 히어로(요약) */}
+      {/* 히어로(요약) — 1인당은 표시 안 함(반올림·흡수자로 사람마다 다를 수 있어 오해 소지). */}
       <section className="mb-7 mt-5 text-center">
-        {/* 제목 있으면 제목이 히어로(1인당은 요약 줄로), 없으면 1인당이 히어로 */}
+        {/* 제목 있으면 제목이 히어로(총액은 요약 줄로), 없으면 총액이 히어로 */}
         {customName ? (
           <>
             <h1 className="text-3xl font-bold tracking-tight">{customName}</h1>
             <p className="mt-1.5 text-sm text-neutral-400">
               총 <span className="num font-medium text-neutral-600 dark:text-neutral-300">{formatWon(total)}</span> ·{' '}
-              {memberIds.length}명 · 1인당{' '}
-              <span className="num font-medium text-neutral-600 dark:text-neutral-300">{formatWon(perPerson)}</span>
+              {memberIds.length}명
             </p>
           </>
         ) : (
           <>
-            <p className="text-sm text-neutral-400">
-              총 <span className="num font-medium text-neutral-600 dark:text-neutral-300">{formatWon(total)}</span> ·{' '}
-              {memberIds.length}명
-            </p>
-            <div className="num mt-1 text-4xl font-bold tracking-tight">1인당 {formatWon(perPerson)}</div>
+            <p className="text-sm text-neutral-400">{memberIds.length}명</p>
+            <div className="num mt-1 text-4xl font-bold tracking-tight">총 {formatWon(total)}</div>
           </>
         )}
         {(payerLabel || dateLabel) && (
@@ -112,7 +101,6 @@ export default async function SettlePage({ params }: Params) {
         done={snap.settledTransfers}
         account={account}
         accountMemberId={accountMember?.id ?? null}
-        canManageAll={canManageAll}
       />
 
       <div className="mt-auto pt-8">

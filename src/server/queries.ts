@@ -8,6 +8,8 @@ import type {
   QuickSettleInput,
   SaveAccountInput,
   UpdateAccountInput,
+  UpdateItemizedBillInput,
+  UpdateQuickSettleInput,
 } from './validation'
 import type { Json } from './database.types'
 
@@ -151,6 +153,100 @@ export async function addItemizedBill(
   return { slug }
 }
 
+// ── 정산 수정(내역에서 내가 만든 정산을 교체) ───────────────────────
+// 교체 RPC가 한 트랜잭션에서 자식(settlements/expense_shares/expenses/members) wipe → 재삽입.
+// 분담 계산은 생성과 동일(반올림 단일 출처). 소유자 가드는 RPC가(p_owner_id ↔ groups.owner_id).
+
+/** 빠른정산 수정. createQuickSettle과 같은 분담 계산 + update_quick_settle 호출. */
+export async function updateQuickSettle(
+  input: UpdateQuickSettleInput,
+  ownerId: string,
+): Promise<{ slug: string }> {
+  const supa = getAdminClient()
+  const indexIds = input.members.map((_, i) => String(i))
+  const shares = equalSplit(input.amount, indexIds, {
+    paidBy: String(input.payerIndex),
+    unit: input.unit,
+    absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
+  })
+  const sharesArr = shares.map((s) => s.amount)
+
+  const { error } = await supa.rpc('update_quick_settle', {
+    p_slug: input.slug,
+    p_owner_id: ownerId,
+    p_name: input.name?.trim() || '빠른정산',
+    p_member_names: input.members,
+    p_amount: input.amount,
+    p_paid_by_index: input.payerIndex,
+    p_shares: sharesArr,
+    p_description: input.description ?? '',
+    p_acct_bank: input.account?.bankName,
+    p_acct_no: input.account?.accountNo,
+    p_acct_holder: input.account?.accountHolder,
+  })
+  if (error) throw new Error(`정산 수정 실패: ${error.message}`)
+  await setEventDate(input.slug, input.eventDate)
+  return { slug: input.slug }
+}
+
+/** 항목별 정산 수정. addItemizedBill과 같은 항목별 분담 계산 + update_itemized_bill 호출. */
+export async function updateItemizedBill(
+  input: UpdateItemizedBillInput,
+  ownerId: string,
+): Promise<{ slug: string }> {
+  const supa = getAdminClient()
+  const memberCount = input.members.length
+
+  const splitOpts = {
+    paidBy: String(input.payerIndex),
+    unit: input.unit,
+    absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
+  }
+  const items = input.items.map((it): Json => {
+    const weights = it.participants.map((idx) => ({ memberId: String(idx), weight: 1 }))
+    const shares = splitByWeights(it.amount, weights, splitOpts)
+    const aligned = Array.from({ length: memberCount }, () => 0)
+    for (const s of shares) aligned[Number(s.memberId)] = s.amount
+    return {
+      description: it.description ?? '',
+      amount: it.amount,
+      paid_by_index: input.payerIndex,
+      shares: aligned,
+    }
+  })
+
+  const name =
+    input.name?.trim() ||
+    input.items.find((it) => it.description?.trim())?.description?.trim() ||
+    '항목별 정산'
+
+  const { error } = await supa.rpc('update_itemized_bill', {
+    p_slug: input.slug,
+    p_owner_id: ownerId,
+    p_name: name,
+    p_member_names: input.members,
+    p_items: items,
+    p_acct_bank: input.account?.bankName,
+    p_acct_no: input.account?.accountNo,
+    p_acct_holder: input.account?.accountHolder,
+  })
+  if (error) throw new Error(`정산 수정 실패: ${error.message}`)
+  await setEventDate(input.slug, input.eventDate)
+  return { slug: input.slug }
+}
+
+/** 정산 삭제(내역). 본인(owner_id) 것만. 자식은 FK cascade로 정리(0001). count=0이면 남의 것/없음. */
+export async function deleteGroup(ownerId: string, slug: string): Promise<{ ok: boolean }> {
+  const supa = getAdminClient()
+  const { error, count } = await supa
+    .from('groups')
+    .delete({ count: 'exact' })
+    .eq('slug', slug)
+    .eq('owner_id', ownerId)
+  if (error) throw new Error(error.message)
+  return { ok: (count ?? 0) > 0 }
+}
+
 /** 그룹 전체 스냅샷(멤버/지출+분담/정산)을 도메인 형태로 매핑. 읽기 전용. */
 export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null> {
   const supa = getAdminClient()
@@ -226,6 +322,113 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
     expenses: expenseRecords,
     settlements: settlementRecords,
     settledTransfers,
+  }
+}
+
+// ── 수정 폼 프리필(내역에서 '수정') ────────────────────────────────
+// 정규화된 DB 행을 만들기 폼 모양으로 되살린다. 모드=split_type('weighted'=항목별), 계좌=멤버0.
+// unit/absorber는 저장 안 됨(계산된 분담만 있음) → 폼은 '안 함'으로 시작, 사용자가 다시 고름(ADR-022).
+
+/** 항목별 수정 시 항목 1개(이름·금액·참여자 플래그, members 길이). */
+export interface EditableItem {
+  name: string
+  amount: number
+  among: boolean[]
+}
+
+/** 수정 폼이 그대로 채울 수 있는 평범한 형태. ownerId로 라우트가 소유자 게이트. */
+export interface EditableGroup {
+  slug: string
+  ownerId: string | null
+  name: string
+  eventDate: string | null
+  mode: 'quick' | 'items'
+  members: string[]
+  payerIndex: number
+  amount: number // quick=단일 지출 금액. items=0(항목으로 표현).
+  items: EditableItem[]
+  account: { bankName: string; accountNo: string; accountHolder: string } | null
+  hasSettlements: boolean // '보냈어요' 기록 존재 → 수정 시 초기화 경고.
+}
+
+/** 한 그룹을 수정 폼 모양으로 읽음(읽기 전용). 소유자 검증은 호출 라우트가 ownerId로. */
+export async function getEditableGroup(slug: string): Promise<EditableGroup | null> {
+  const supa = getAdminClient()
+  const { data: group, error: gErr } = await supa
+    .from('groups')
+    .select('id, slug, name, owner_id, event_date')
+    .eq('slug', slug)
+    .maybeSingle()
+  if (gErr) throw new Error(gErr.message)
+  if (!group) return null
+
+  const [membersRes, expensesRes, settlementsRes] = await Promise.all([
+    supa
+      .from('members')
+      .select('id, name, bank_name, account_no, account_holder')
+      .eq('group_id', group.id)
+      .order('created_at'),
+    supa
+      .from('expenses')
+      .select('id, description, amount, paid_by, split_type')
+      .eq('group_id', group.id)
+      .order('created_at'),
+    supa.from('settlements').select('id').eq('group_id', group.id).limit(1),
+  ])
+  const members = membersRes.data ?? []
+  const expenses = expensesRes.data ?? []
+  const memberIds = members.map((m) => m.id)
+
+  // 지출별 참여 멤버(분담 행이 있는 멤버) 집합 — 항목별 among 복원용.
+  const expenseIds = expenses.map((e) => e.id)
+  const sharesRes = expenseIds.length
+    ? await supa.from('expense_shares').select('expense_id, member_id').in('expense_id', expenseIds)
+    : { data: [] as { expense_id: string; member_id: string }[] }
+  const partsByExpense = new Map<string, Set<string>>()
+  for (const s of sharesRes.data ?? []) {
+    const set = partsByExpense.get(s.expense_id) ?? new Set<string>()
+    set.add(s.member_id)
+    partsByExpense.set(s.expense_id, set)
+  }
+
+  const isItemized = expenses.some((e) => e.split_type === 'weighted')
+  const payerIndex = expenses.length ? Math.max(0, memberIds.indexOf(expenses[0].paid_by)) : 0
+
+  let amount = 0
+  let items: EditableItem[] = []
+  if (isItemized) {
+    items = expenses.map((e) => {
+      const set = partsByExpense.get(e.id) ?? new Set<string>()
+      return {
+        // RPC가 빈 설명을 '항목'으로 저장 → 폼엔 빈칸으로(placeholder 표시).
+        name: e.description === '항목' ? '' : e.description,
+        amount: e.amount,
+        among: memberIds.map((id) => set.has(id)),
+      }
+    })
+  } else {
+    amount = expenses.length ? expenses[0].amount : 0
+  }
+
+  // 계좌는 항상 멤버 0(나). 세 필드 다 있을 때만.
+  const m0 = members[0]
+  const account =
+    m0 && m0.bank_name && m0.account_no && m0.account_holder
+      ? { bankName: m0.bank_name, accountNo: m0.account_no, accountHolder: m0.account_holder }
+      : null
+
+  return {
+    slug: group.slug,
+    ownerId: group.owner_id,
+    name: group.name,
+    eventDate: group.event_date,
+    mode: isItemized ? 'items' : 'quick',
+    members: members.map((m) => m.name),
+    payerIndex,
+    amount,
+    items,
+    account,
+    hasSettlements: (settlementsRes.data ?? []).length > 0,
   }
 }
 
