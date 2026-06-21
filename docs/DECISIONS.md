@@ -216,3 +216,10 @@
 - **노출:** **항목별(isItemized)만** 상세보기 표시. 빠른정산은 히어로/보드가 이미 총액·인원·낸 사람을 다 보여줘 숨김. 자리 1개뿐이면 '1차' 라벨 생략. 메뉴명 빈값('항목')은 placeholder 폴백. 멤버명은 보드가 이미 쓰는 displayName이라 **추가 PII 0**(계좌번호·실명 자체는 상세에 안 넣음 — 받는계좌 카드는 보드 소관).
 - **검증:** tsc·lint·test 58·build green + 프리뷰(실 항목별 슬러그 `-RAKXZkd32_UC0NEMRi3H`: 1차 음식 20,000[나·김철수·홍길동]/술 30,000[나·홍길동·긴환욱] · 2차 음식 30,000[나·김철수·홍길동]/술 20,000[나·김철수·긴환욱]·참여 칩·합계 정확 / 빠른정산 슬러그는 상세보기 안 뜸=회귀 0 / 콘솔 0). **이해(3렌즈 워크플로)→설계** 후 구현. (실DB 직접 조회는 분류기가 막아 사용자가 공유 링크 제공.)
 - **상태:** 확정·라이브(`849012d`).
+
+### ADR-028 — 다크/라이트 토글 + 기본 다크(Tailwind `media`→`class`)
+- **맥락(사용자 2026-06-22):** 홈 상단 우측에 다크모드 스위치, 기본은 다크.
+- **변경:** Tailwind `darkMode: 'class'`(전엔 미설정=`media`=OS prefers-color-scheme 따라감). **기본 다크** = `layout`이 `<html className="dark" suppressHydrationWarning>` 시드 + **FOUC 방지 인라인 스크립트**(페인트 전 `localStorage['payven:theme']`가 `'light'`일 때만 dark 제거, 그 외=다크). `globals.css`의 `color-scheme`를 `.dark`로 제어(네이티브 컨트롤 일치). `themeColor` 다크(`#0a0a0a`). **ThemeToggle**(신규 `'use client'`, 홈 헤더 우측): 전환 대상 아이콘(다크=해/라이트=달), 클릭 시 `html.dark` 토글 + `localStorage` 저장 + `<meta theme-color>` 갱신, 마운트 전엔 빈 버튼(하이드레이트 불일치 회피). `IcoSun`/`IcoMoon` 추가, 홈 헤더를 flex(좌 워드마크·우 토글).
+- **주의:** `media`→`class` 전환으로 **light-OS 사용자도 이제 기본 다크**(의도). 토글은 홈에만 노출하나 선택은 `html`+localStorage라 전역 지속. `suppressHydrationWarning`(html)로 SSR `dark`↔스크립트 변경 불일치 경고 억제(next-themes 패턴). FOUC 0(기본 다크 SSR + 스크립트가 light만 사전 적용).
+- **검증:** tsc·lint·test 58·build green + 프리뷰(기본 다크 `html.dark`·bg `#0a0a0a` / 토글→라이트 bg `#fafafa`·`color-scheme:light`·meta `#ffffff`·localStorage `'light'` / 새로고침 지속 / **하이드레이션 경고 0·FOUC 0** / 아이콘 해↔달 스왑·aria 갱신 / 콘솔 0).
+- **상태:** 확정·라이브(`9e6fe9c`).
