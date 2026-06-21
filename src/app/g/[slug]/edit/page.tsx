@@ -30,7 +30,7 @@ export default async function EditSettlePage({ params }: Params) {
         members: g.members,
         payerIndex: g.payerIndex,
         amount: g.amount,
-        items: g.items,
+        rounds: g.rounds,
         eventDate: g.eventDate,
         account: g.account,
         hasSettlements: g.hasSettlements,

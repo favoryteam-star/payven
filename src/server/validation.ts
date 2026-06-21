@@ -63,12 +63,12 @@ function refineMemberBounds(
   }
 }
 
-// 항목별: 남는 금액 받을 사람 범위 + 각 항목의 낸 사람·참여자 인덱스 범위(항목마다 결제자가 다를 수 있음).
+// 항목별(차수): 남는 금액 받을 사람 범위 + 각 차수의 낸 사람·차수 안 항목 참여자 인덱스 범위.
 function refineItemizedBounds(
   val: {
     members: string[]
     absorberIndex?: number | undefined
-    items: { payerIndex: number; participants: number[] }[]
+    rounds: { payerIndex: number; items: { participants: number[] }[] }[]
   },
   ctx: z.RefinementCtx,
 ): void {
@@ -76,18 +76,20 @@ function refineItemizedBounds(
   if (val.absorberIndex !== undefined && val.absorberIndex >= n) {
     ctx.addIssue({ code: 'custom', message: '남는 금액 받을 사람이 범위를 벗어났습니다', path: ['absorberIndex'] })
   }
-  val.items.forEach((it, i) => {
-    if (it.payerIndex >= n) {
-      ctx.addIssue({ code: 'custom', message: '낸 사람 인덱스가 범위를 벗어났습니다', path: ['items', i, 'payerIndex'] })
+  val.rounds.forEach((round, r) => {
+    if (round.payerIndex >= n) {
+      ctx.addIssue({ code: 'custom', message: '낸 사람 인덱스가 범위를 벗어났습니다', path: ['rounds', r, 'payerIndex'] })
     }
-    it.participants.forEach((p, j) => {
-      if (p >= n) {
-        ctx.addIssue({
-          code: 'custom',
-          message: '참여자 인덱스가 범위를 벗어났습니다',
-          path: ['items', i, 'participants', j],
-        })
-      }
+    round.items.forEach((it, i) => {
+      it.participants.forEach((p, j) => {
+        if (p >= n) {
+          ctx.addIssue({
+            code: 'custom',
+            message: '참여자 인덱스가 범위를 벗어났습니다',
+            path: ['rounds', r, 'items', i, 'participants', j],
+          })
+        }
+      })
     })
   })
 }
@@ -121,32 +123,39 @@ export const updateQuickSettleSchema = quickSettleObject
   .superRefine(refineMemberBounds)
 export type UpdateQuickSettleInput = z.infer<typeof updateQuickSettleSchema>
 
-// 항목별 정산 입력. 한 정산 = 멤버 + 항목(=건) N개. **항목마다 낸 사람(payerIndex)이 다를 수 있다**
-// (1차 나·2차 친구처럼). 항목별 participants(나눠 가질 멤버 인덱스)와 payerIndex, 분담은 서버 splitByWeights.
+// 항목별 정산 입력 = 멤버 + 차수(round) N개. **각 차수에 낸 사람(payerIndex) 한 명**(1차 나·2차 친구),
+// 차수 안에 항목(메뉴) M개(각자 participants 다름; 간단한 차수는 항목 1개=총액). 분담은 서버 splitByWeights.
 const itemizedBillObject = z.object({
   name: z.string().trim().max(50).optional(),
   members: z
     .array(z.string().trim().min(1, '이름을 입력해 주세요').max(20))
     .min(2, '최소 2명이 필요합니다')
     .max(30),
-  items: z
+  rounds: z
     .array(
-      z
-        .object({
-          description: z.string().trim().max(40).optional(),
-          amount: z.number().int().positive().max(1_000_000_000),
-          payerIndex: z.number().int().min(0), // 이 항목(건)을 낸 사람
-          participants: z
-            .array(z.number().int().min(0))
-            .min(1, '항목에 최소 1명이 필요합니다'),
-        })
-        .refine((it) => new Set(it.participants).size === it.participants.length, {
-          message: '항목 참여자가 중복되었습니다',
-          path: ['participants'],
-        }),
+      z.object({
+        payerIndex: z.number().int().min(0), // 이 차수(자리)를 낸 사람
+        items: z
+          .array(
+            z
+              .object({
+                description: z.string().trim().max(40).optional(),
+                amount: z.number().int().positive().max(1_000_000_000),
+                participants: z
+                  .array(z.number().int().min(0))
+                  .min(1, '항목에 최소 1명이 필요합니다'),
+              })
+              .refine((it) => new Set(it.participants).size === it.participants.length, {
+                message: '항목 참여자가 중복되었습니다',
+                path: ['participants'],
+              }),
+          )
+          .min(1, '차수에 항목이 최소 1개 필요합니다')
+          .max(50),
+      }),
     )
-    .min(1, '항목이 최소 1개 필요합니다')
-    .max(50),
+    .min(1, '차수가 최소 1개 필요합니다')
+    .max(20),
   // 반올림 단위 + 남는 금액 받을 사람(전역 멤버 인덱스). 항목마다 적용, 흡수자 안 낀 항목은 자동.
   unit: roundUnitSchema,
   absorberIndex: z.number().int().min(0).optional(),

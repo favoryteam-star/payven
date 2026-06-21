@@ -19,11 +19,14 @@ import { ModeChips, type SettleMode } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
 import { AccountField, EMPTY_INLINE, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 
-// 항목(=건: 메뉴 한 줄, 또는 1차/2차 같은 한 자리) 1개. among = 멤버 길이의 참여 여부(기본 전원).
-// payer = 이 건을 낸 사람의 멤버 인덱스(건마다 다를 수 있음 — 1차 나, 2차 친구).
-export type Item = { name: string; amount: number; among: boolean[]; payer: number }
+// 메뉴(항목) 1개. among = 멤버 길이의 참여 여부(기본 전원).
+export type RoundItem = { name: string; amount: number; among: boolean[] }
+// 차수(=한 자리: 1차·2차) 1개. payer=그 자리 낸 사람 멤버 인덱스. split=메뉴별로 나눴는지.
+// split=false면 items=[총액 1개], split=true면 items=메뉴 여러 개.
+export type Round = { payer: number; split: boolean; items: RoundItem[] }
 
 // 수정 모드 프리필. editSlug가 있으면 '만들기'가 아니라 '교체 수정'으로 동작.
+// rounds는 split 없이 들어옴(폼이 items.length로 판정).
 export interface SettleFormInitial {
   editSlug: string
   mode: SettleMode
@@ -31,7 +34,7 @@ export interface SettleFormInitial {
   members: string[]
   payerIndex: number
   amount: number
-  items: Item[]
+  rounds: { payer: number; items: RoundItem[] }[]
   eventDate: string | null
   account: { bankName: string; accountNo: string; accountHolder: string } | null
   hasSettlements: boolean
@@ -58,8 +61,7 @@ function inlineFrom(account: SettleFormInitial['account']): InlineAcct {
   return account ? { bank: account.bankName, no: account.accountNo, holder: account.accountHolder } : EMPTY_INLINE
 }
 
-// 1/N과 항목별을 한 페이지에서 토글로(페이지 이동 X). 헤더·하단탭·공유입력(멤버·낸사람·단위·계좌)은
-// 그대로 두고, 맨 위 입력칸만 바뀐다: 1/N = 금액, 항목별 = 항목.
+// 1/N과 항목별을 한 페이지에서 토글로. 항목별 = 차수(round) 묶음, 차수마다 낸 사람 + 메뉴(간단=총액 1줄).
 // initial이 있으면 '수정'(교체): 상태를 기존 정산으로 시드하고 교체 액션을 호출한다.
 export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const router = useRouter()
@@ -77,9 +79,11 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   // 1/N 전용
   const [amount, setAmount] = useState(initial?.amount ?? 0)
   const [padOpen, setPadOpen] = useState(false)
-  // 항목별 전용
-  const [items, setItems] = useState<Item[]>(initial?.items ?? [])
-  const [padItem, setPadItem] = useState<number | null>(null)
+  // 항목별 전용 — 차수 묶음. split은 items.length>1로 시드.
+  const [rounds, setRounds] = useState<Round[]>(
+    initial?.rounds?.map((r) => ({ payer: r.payer, split: r.items.length > 1, items: r.items })) ?? [],
+  )
+  const [padTarget, setPadTarget] = useState<{ r: number; i: number } | null>(null) // 메뉴 금액 패드 대상
   // 공통
   const [error, setError] = useState<string | null>(null)
   const [loginPrompt, setLoginPrompt] = useState(false)
@@ -145,7 +149,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       if (typeof d.unit === 'number') setUnit(d.unit)
       if (typeof d.absorberIndex === 'number') setAbsorberIndex(d.absorberIndex)
       if (typeof d.eventDate === 'string') setEventDate(d.eventDate)
-      if (Array.isArray(d.items)) setItems(d.items)
+      if (Array.isArray(d.rounds)) setRounds(d.rounds)
       if (d.acct && typeof d.acct === 'object') setAcct(d.acct)
       setAutoSubmit(true)
     } catch {
@@ -173,7 +177,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const goLogin = () => {
     sessionStorage.setItem(
       'payven:draft:create',
-      JSON.stringify({ mode, title, amount, members, payerIndex, unit, absorberIndex, eventDate, items, acct }),
+      JSON.stringify({ mode, title, amount, members, payerIndex, unit, absorberIndex, eventDate, rounds, acct }),
     )
     window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
   }
@@ -183,8 +187,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const filledIdx = members.map((n, i) => (n.trim() ? i : -1)).filter((i) => i >= 0)
   // 결제자가 비워졌거나 범위를 벗어나면 첫 채워진 멤버로 — 표시·계산·제출의 단일 출처.
   const effectivePayer = filledIdx.includes(payerIndex) ? payerIndex : (filledIdx[0] ?? 0)
-  // 항목별: 그 항목 낸 사람이 비었거나 범위 밖이면 첫 채워진 멤버로(표시·계산·제출 단일 출처).
-  const effItemPayer = (it: Item) => (filledIdx.includes(it.payer) ? it.payer : (filledIdx[0] ?? 0))
+  const effRoundPayer = (rd: Round) => (filledIdx.includes(rd.payer) ? rd.payer : (filledIdx[0] ?? 0))
   // 최근 참여자 빠른 추가: 이미 들어간 이름은 제외.
   const currentNames = new Set(members.map((m) => m.trim()).filter(Boolean))
   const memberSuggestions = recentNames.filter((n) => !currentNames.has(n)).slice(0, 8)
@@ -194,16 +197,17 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const quickBase = perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
   const quickLeftover = perPerson > 0 ? amount - quickBase * filled.length : 0
 
-  // 항목별: 인별 합계(단위·흡수자 반영, 미리보기=제출과 동일 도메인 호출) + 남는 금액 합. 낸 사람은 항목별.
-  const total = items.reduce((s, it) => s + (it.amount > 0 ? it.amount : 0), 0)
+  // 항목별: 모든 차수의 메뉴를 펼쳐(낸 사람=그 차수) 인별 합계·남는 금액. 미리보기=제출과 동일 도메인 호출.
+  const allItems = rounds.flatMap((rd) => rd.items.map((it) => ({ it, payer: effRoundPayer(rd) })))
+  const total = allItems.reduce((s, { it }) => s + (it.amount > 0 ? it.amount : 0), 0)
   const tabs = filledIdx.map(() => 0)
   let itemsLeftover = 0
-  for (const it of items) {
+  for (const { it, payer } of allItems) {
     if (it.amount <= 0) continue
     const parts = filledIdx.filter((fi) => it.among[fi])
     if (parts.length === 0) continue
     const shares = equalSplit(it.amount, parts.map(String), {
-      paidBy: String(effItemPayer(it)),
+      paidBy: String(payer),
       unit,
       absorber: absorberIndex !== null ? String(absorberIndex) : undefined,
     })
@@ -216,37 +220,39 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const leftover = mode === 'quick' ? quickLeftover : itemsLeftover
   const showUnit = mode === 'quick' ? perPerson > 0 : filledIdx.length >= 2 && total > 0
 
-  // ── 멤버 ──
+  const allAmong = () => members.map(() => true)
+
+  // ── 멤버 ── (추가/삭제 시 모든 차수의 메뉴 among + 차수 payer 인덱스도 갱신)
   const setMember = (i: number, v: string) =>
     setMembers((p) => p.map((m, idx) => (idx === i ? v : m)))
+  const addAmong = (rs: Round[]) =>
+    rs.map((rd) => ({ ...rd, items: rd.items.map((it) => ({ ...it, among: [...it.among, true] })) }))
   const addMember = () => {
     setMembers((p) => [...p, ''])
-    setItems((p) => p.map((it) => ({ ...it, among: [...it.among, true] })))
+    setRounds(addAmong)
   }
-  // 최근 칩 탭 → 빈 칸 있으면 채우고, 없으면 새로 추가(항목별 among도 갱신).
   const addNamedMember = (name: string) => {
     const empty = members.findIndex((m) => !m.trim())
     if (empty >= 0) {
       setMembers((p) => p.map((m, i) => (i === empty ? name : m)))
     } else {
       setMembers((p) => [...p, name])
-      setItems((p) => p.map((it) => ({ ...it, among: [...it.among, true] })))
+      setRounds(addAmong)
     }
   }
   const removeMember = (i: number) => {
     if (members.length <= 2) return
     setMembers((p) => p.filter((_, idx) => idx !== i))
-    setItems((p) =>
-      p.map((it) => ({
-        ...it,
-        among: it.among.filter((_, idx) => idx !== i),
-        payer: it.payer === i ? 0 : it.payer > i ? it.payer - 1 : it.payer,
+    setRounds((p) =>
+      p.map((rd) => ({
+        payer: rd.payer === i ? 0 : rd.payer > i ? rd.payer - 1 : rd.payer,
+        split: rd.split,
+        items: rd.items.map((it) => ({ ...it, among: it.among.filter((_, idx) => idx !== i) })),
       })),
     )
     setPayerIndex((p) => (p === i ? 0 : p > i ? p - 1 : p))
     setAbsorberIndex((p) => (p === null ? null : p === i ? null : p > i ? p - 1 : p))
   }
-  // 엔터 → 빈 칸이면 무시, 마지막 칸이면 새 사람 추가, 그다음 칸으로 포커스 이동
   const onMemberKeyDown = (e: KeyboardEvent<HTMLInputElement>, i: number) => {
     if (e.key !== 'Enter') return
     e.preventDefault()
@@ -255,37 +261,70 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     setFocusMember(i + 1)
   }
 
-  // ── 항목 ──
-  const addItem = () =>
-    setItems((p) => {
-      // 새 항목은 직전 항목의 참여자·낸 사람을 상속(없으면 전원·나) — 한 명이 다 내면 매번 안 바꿔도 됨.
-      const base = p.length ? [...p[p.length - 1].among] : members.map(() => true)
-      while (base.length < members.length) base.push(true)
-      const payer = p.length ? p[p.length - 1].payer : 0
-      return [...p, { name: '', amount: 0, among: base.slice(0, members.length), payer }]
+  // ── 차수(round) ──
+  const addRound = () =>
+    setRounds((p) => {
+      const payer = p.length ? p[p.length - 1].payer : 0 // 직전 차수 낸 사람 상속
+      return [...p, { payer, split: false, items: [{ name: '', amount: 0, among: allAmong() }] }]
     })
-  const removeItem = (idx: number) => {
-    setItems((p) => p.filter((_, i) => i !== idx))
-    setPadItem((p) => (p === null ? null : p === idx ? null : p > idx ? p - 1 : p))
+  const removeRound = (r: number) => {
+    setRounds((p) => p.filter((_, i) => i !== r))
+    setPadTarget((t) => (t === null ? null : t.r === r ? null : t.r > r ? { ...t, r: t.r - 1 } : t))
   }
-  const setItemName = (idx: number, v: string) =>
-    setItems((p) => p.map((it, i) => (i === idx ? { ...it, name: v } : it)))
-  const setItemAmount = (idx: number, amt: number) =>
-    setItems((p) => p.map((it, i) => (i === idx ? { ...it, amount: amt } : it)))
-  const setItemPayer = (idx: number, mi: number) =>
-    setItems((p) => p.map((it, i) => (i === idx ? { ...it, payer: mi } : it)))
-  const toggleAmong = (idx: number, mi: number) =>
-    setItems((p) =>
-      p.map((it, i) => {
-        if (i !== idx) return it
-        const among = it.among.map((b, k) => (k === mi ? !b : b))
-        return filledIdx.some((fi) => among[fi]) ? { ...it, among } : it // 최소 1명 유지
+  const setRoundPayer = (r: number, mi: number) =>
+    setRounds((p) => p.map((rd, i) => (i === r ? { ...rd, payer: mi } : rd)))
+  const toggleRoundSplit = (r: number) =>
+    setRounds((p) =>
+      p.map((rd, i) => {
+        if (i !== r) return rd
+        if (!rd.split) return { ...rd, split: true } // 펼치기: 기존 한 줄이 첫 메뉴가 됨
+        // 접기: 메뉴 합쳐 한 줄로(금액 합·참여 합집합)
+        const amt = rd.items.reduce((s, it) => s + (it.amount > 0 ? it.amount : 0), 0)
+        const among = members.map((_, k) => rd.items.some((it) => it.among[k]))
+        return { ...rd, split: false, items: [{ name: '', amount: amt, among }] }
       }),
     )
 
-  // 모드 전환. 제목이 아직 기본값(또는 빈칸)이면 새 모드 기본값으로 바꾸고, 직접 고친 제목은 유지.
+  // ── 메뉴(차수 안 항목) ──
+  const patchItem = (r: number, ii: number, patch: Partial<RoundItem>) =>
+    setRounds((p) =>
+      p.map((rd, i) => (i === r ? { ...rd, items: rd.items.map((it, k) => (k === ii ? { ...it, ...patch } : it)) } : rd)),
+    )
+  const addItemToRound = (r: number) =>
+    setRounds((p) =>
+      p.map((rd, i) => {
+        if (i !== r) return rd
+        const base = rd.items.length ? [...rd.items[rd.items.length - 1].among] : allAmong()
+        while (base.length < members.length) base.push(true)
+        return { ...rd, items: [...rd.items, { name: '', amount: 0, among: base.slice(0, members.length) }] }
+      }),
+    )
+  const removeItemFromRound = (r: number, ii: number) => {
+    setRounds((p) =>
+      p.map((rd, i) => (i === r && rd.items.length > 1 ? { ...rd, items: rd.items.filter((_, k) => k !== ii) } : rd)),
+    )
+    setPadTarget((t) => (t && t.r === r && t.i === ii ? null : t))
+  }
+  const toggleItemAmong = (r: number, ii: number, mi: number) =>
+    setRounds((p) =>
+      p.map((rd, i) => {
+        if (i !== r) return rd
+        return {
+          ...rd,
+          items: rd.items.map((it, k) => {
+            if (k !== ii) return it
+            const among = it.among.map((b, j) => (j === mi ? !b : b))
+            return filledIdx.some((fi) => among[fi]) ? { ...it, among } : it // 최소 1명 유지
+          }),
+        }
+      }),
+    )
+
+  // 모드 전환. 제목 따라가기 + 항목별 첫 진입이면 차수 1개 자동 생성(바로 입력하게).
   const switchMode = (m: SettleMode) => {
     setTitle((t) => (t.trim() === '' || t === TITLES.quick || t === TITLES.items ? TITLES[m] : t))
+    if (m === 'items')
+      setRounds((p) => (p.length ? p : [{ payer: 0, split: false, items: [{ name: '', amount: 0, among: allAmong() }] }]))
     setMode(m)
   }
 
@@ -294,23 +333,27 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     const names = filledIdx.map((i) => members[i].trim())
     if (names.length < 2) return setError('최소 2명이 필요해요')
 
-    // 모드별 메인 입력 검증 + 항목별 payload 구성(항목마다 낸 사람 포함)
-    const payload: { description?: string; amount: number; participants: number[]; payerIndex: number }[] = []
+    // 모드별 메인 입력 검증 + 항목별 payload(차수→메뉴) 구성
+    const payload: { payerIndex: number; items: { description?: string; amount: number; participants: number[] }[] }[] = []
     if (mode === 'quick') {
       if (amount <= 0) return setError('금액을 입력해 주세요')
     } else {
-      const realItems = items.filter((it) => it.amount > 0)
-      if (realItems.length === 0) return setError('항목을 1개 이상 추가해 주세요')
-      for (const it of realItems) {
-        const participants = filledIdx
-          .map((oi, pos) => ({ oi, pos }))
-          .filter((x) => it.among[x.oi])
-          .map((x) => x.pos)
-        if (participants.length === 0) return setError('모든 항목에 참여자가 1명 이상 필요해요')
-        // 항목 낸 사람을 filled 위치(서버가 받는 멤버 배열 기준)로 변환.
-        const payerPos = Math.max(0, filledIdx.indexOf(effItemPayer(it)))
-        payload.push({ description: it.name.trim() || undefined, amount: it.amount, participants, payerIndex: payerPos })
+      for (const rd of rounds) {
+        const realItems = rd.items.filter((it) => it.amount > 0)
+        if (realItems.length === 0) continue // 금액 없는 차수는 건너뜀
+        const payerPos = Math.max(0, filledIdx.indexOf(effRoundPayer(rd)))
+        const items: { description?: string; amount: number; participants: number[] }[] = []
+        for (const it of realItems) {
+          const participants = filledIdx
+            .map((oi, pos) => ({ oi, pos }))
+            .filter((x) => it.among[x.oi])
+            .map((x) => x.pos)
+          if (participants.length === 0) return setError('모든 항목에 참여자가 1명 이상 필요해요')
+          items.push({ description: it.name.trim() || undefined, amount: it.amount, participants })
+        }
+        payload.push({ payerIndex: payerPos, items })
       }
+      if (payload.length === 0) return setError('금액이 있는 자리를 1개 이상 넣어 주세요')
     }
 
     const payer = Math.max(0, filledIdx.indexOf(effectivePayer)) // 1/N 낸 사람
@@ -328,7 +371,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
     startTransition(async () => {
       try {
-        // 공유 필드. 낸 사람은 1/N=전체 1명(payerIndex), 항목별=항목마다(payload에 포함)라 여기 없음.
+        // 공유 필드. 낸 사람은 1/N=전체 1명(payerIndex), 항목별=차수마다(payload에 포함)라 여기 없음.
         const common = {
           name: title.trim() || TITLES[mode],
           members: names,
@@ -341,10 +384,10 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         const res = isEdit
           ? mode === 'quick'
             ? await updateQuickSettleAction({ slug: editSlug, amount, payerIndex: payer, ...common })
-            : await updateItemizedBillAction({ slug: editSlug, items: payload, ...common })
+            : await updateItemizedBillAction({ slug: editSlug, rounds: payload, ...common })
           : mode === 'quick'
             ? await quickSettleAction({ amount, payerIndex: payer, ...common })
-            : await addItemizedBillAction({ items: payload, ...common })
+            : await addItemizedBillAction({ rounds: payload, ...common })
         if ('needLogin' in res) {
           // 만들기 = 안내 시트(입력값 보존). 수정 = 세션 만료 → 로그인 후 수정 화면으로 복귀.
           if (isEdit) {
@@ -366,12 +409,27 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     (active
       ? 'bg-brand text-white'
       : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500')
-  // 항목 '낸 사람'은 단일 선택이라 미선택도 안 흐리게(참여 토글과 구분).
+  // 단일 선택(차수 낸 사람)은 미선택도 안 흐리게(참여 토글과 구분).
   const payerChip = (active: boolean) =>
     'rounded-full px-3 py-1.5 text-sm font-medium transition ' +
     (active
       ? 'bg-brand text-white'
       : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+  const amountBtnCls =
+    'num shrink-0 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] font-semibold tabular-nums dark:border-neutral-700 dark:bg-neutral-950'
+
+  // 참여 칩 한 줄(메뉴/총액 공용)
+  const amongRow = (r: number, ii: number, it: RoundItem) =>
+    filledIdx.length >= 1 ? (
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <span className="w-10 shrink-0 text-xs text-neutral-400">참여</span>
+        {filledIdx.map((fi) => (
+          <button key={fi} onClick={() => toggleItemAmong(r, ii, fi)} className={partChip(it.among[fi])}>
+            {members[fi].trim()}
+          </button>
+        ))}
+      </div>
+    ) : null
 
   return (
     <main
@@ -422,7 +480,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         />
       </section>
 
-      {/* 맨 위 입력 — 1/N은 금액, 항목별은 항목(나머지 섹션은 공유) */}
+      {/* 맨 위 입력 — 1/N은 금액, 항목별은 차수 묶음 */}
       {mode === 'quick' ? (
         <button
           onClick={() => setPadOpen(true)}
@@ -439,59 +497,104 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         </button>
       ) : (
         <section className="mb-5">
-          <p className="mb-2 text-sm font-medium text-neutral-500">뭘 먹었어요?</p>
+          <p className="mb-2 text-sm font-medium text-neutral-500">어디어디 갔어요?</p>
           <div className="flex flex-col gap-3">
-            {items.map((it, idx) => (
+            {rounds.map((rd, r) => (
               <div
-                key={idx}
+                key={r}
                 className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900"
               >
-                <div className="flex items-center gap-2">
-                  <input
-                    value={it.name}
-                    placeholder={`항목 ${idx + 1}`}
-                    onChange={(e) => setItemName(idx, e.target.value)}
-                    className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950"
-                  />
-                  <button
-                    onClick={() => setPadItem(idx)}
-                    className="num shrink-0 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] font-semibold tabular-nums dark:border-neutral-700 dark:bg-neutral-950"
-                  >
-                    {it.amount > 0 ? (
-                      formatWon(it.amount)
-                    ) : (
-                      <span className="text-neutral-300 dark:text-neutral-600">금액</span>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => removeItem(idx)}
-                    aria-label="항목 삭제"
-                    className="shrink-0 px-1 text-neutral-300 hover:text-neutral-500"
-                  >
-                    ✕
-                  </button>
+                <div className="flex items-center justify-between">
+                  <span className="text-[15px] font-semibold">{r + 1}차</span>
+                  {rounds.length > 1 && (
+                    <button
+                      onClick={() => removeRound(r)}
+                      aria-label="차수 삭제"
+                      className="px-1 text-neutral-300 hover:text-neutral-500"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
+
+                {/* 차수 낸 사람 */}
                 {filledIdx.length >= 1 && (
-                  <div className="mt-2.5 flex flex-col gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="w-12 shrink-0 text-xs text-neutral-400">참여</span>
-                      {filledIdx.map((fi) => (
-                        <button key={fi} onClick={() => toggleAmong(idx, fi)} className={partChip(it.among[fi])}>
-                          {members[fi].trim()}
-                        </button>
-                      ))}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="w-10 shrink-0 text-xs text-neutral-400">낸 사람</span>
+                    {filledIdx.map((fi) => (
+                      <button key={fi} onClick={() => setRoundPayer(r, fi)} className={payerChip(effRoundPayer(rd) === fi)}>
+                        {members[fi].trim()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {!rd.split ? (
+                  /* 간단: 총액 + 참여 + 메뉴별로 나누기 */
+                  <>
+                    <div className="mt-2.5 flex items-center justify-between gap-2">
+                      <span className="text-sm text-neutral-400">얼마 나왔어요?</span>
+                      <button onClick={() => setPadTarget({ r, i: 0 })} className={amountBtnCls}>
+                        {rd.items[0].amount > 0 ? (
+                          formatWon(rd.items[0].amount)
+                        ) : (
+                          <span className="text-neutral-300 dark:text-neutral-600">금액</span>
+                        )}
+                      </button>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="w-12 shrink-0 text-xs text-neutral-400">낸 사람</span>
-                      {filledIdx.map((fi) => (
-                        <button
-                          key={fi}
-                          onClick={() => setItemPayer(idx, fi)}
-                          className={payerChip(effItemPayer(it) === fi)}
-                        >
-                          {members[fi].trim()}
-                        </button>
-                      ))}
+                    {amongRow(r, 0, rd.items[0])}
+                    <button
+                      onClick={() => toggleRoundSplit(r)}
+                      className="mt-2.5 inline-flex items-center gap-1 text-sm font-medium text-neutral-500 hover:text-brand"
+                    >
+                      <IcoPlus className="h-3.5 w-3.5" /> 메뉴별로 나누기
+                    </button>
+                  </>
+                ) : (
+                  /* 메뉴별로 나눔: 메뉴 리스트 + 메뉴 추가 + 간단히 */
+                  <div className="mt-2.5 flex flex-col gap-2.5 border-l-2 border-neutral-200 pl-3 dark:border-neutral-700">
+                    {rd.items.map((it, ii) => (
+                      <div key={ii}>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={it.name}
+                            placeholder={`메뉴 ${ii + 1}`}
+                            onChange={(e) => patchItem(r, ii, { name: e.target.value })}
+                            className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950"
+                          />
+                          <button onClick={() => setPadTarget({ r, i: ii })} className={amountBtnCls}>
+                            {it.amount > 0 ? (
+                              formatWon(it.amount)
+                            ) : (
+                              <span className="text-neutral-300 dark:text-neutral-600">금액</span>
+                            )}
+                          </button>
+                          {rd.items.length > 1 && (
+                            <button
+                              onClick={() => removeItemFromRound(r, ii)}
+                              aria-label="메뉴 삭제"
+                              className="shrink-0 px-1 text-neutral-300 hover:text-neutral-500"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        {amongRow(r, ii, it)}
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => addItemToRound(r)}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-neutral-500 hover:text-brand"
+                      >
+                        <IcoPlus className="h-3.5 w-3.5" /> 메뉴 추가
+                      </button>
+                      <button
+                        onClick={() => toggleRoundSplit(r)}
+                        className="text-sm text-neutral-400 underline-offset-2 hover:underline"
+                      >
+                        간단히
+                      </button>
                     </div>
                   </div>
                 )}
@@ -499,10 +602,10 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
             ))}
           </div>
           <button
-            onClick={addItem}
+            onClick={addRound}
             className="mt-3 flex w-full items-center justify-center gap-1 rounded-2xl border border-dashed border-neutral-300 py-3 text-sm font-medium text-neutral-500 hover:border-brand hover:text-brand dark:border-neutral-700"
           >
-            <IcoPlus className="h-4 w-4" /> 항목 추가
+            <IcoPlus className="h-4 w-4" /> {rounds.length + 1}차 추가
           </button>
         </section>
       )}
@@ -562,7 +665,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         )}
       </section>
 
-      {/* 낸 사람 — 1/N만(항목별은 항목 카드마다 '낸 사람'을 따로 고름). */}
+      {/* 낸 사람 — 1/N만(항목별은 차수마다 '낸 사람'을 따로 고름). */}
       {mode === 'quick' && filledIdx.length >= 1 && (
         <section className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">누가 냈어요?</p>
@@ -585,9 +688,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         </section>
       )}
 
-      {/* 날짜 (공유) — 기본 오늘, 수정 가능. 정산결과 "{결제자}님이 결제 · {월일}"에 쓰임.
-          네이티브 date 값 렌더는 iOS에서 크기·정렬이 제멋대로라, 값은 우리가 직접 그리고(다른 입력칸과 동일)
-          투명 input을 위에 겹쳐 피커만 담당시킨다(데스크톱·iOS 동일하게 보임). */}
+      {/* 날짜 (공유) — 기본 오늘, 수정 가능. 네이티브 date 값 렌더는 iOS에서 크기·정렬이 제멋대로라,
+          값은 우리가 직접 그리고 투명 input을 위에 겹쳐 피커만 담당시킨다(데스크톱·iOS 동일). */}
       <section className="mb-5">
         <p className="mb-2 text-sm font-medium text-neutral-500">언제 썼어요?</p>
         <div className="relative">
@@ -731,14 +833,14 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
       {/* 1/N 금액 숫자패드 */}
       <Numpad open={padOpen} amount={amount} onChange={setAmount} onClose={() => setPadOpen(false)} />
-      {/* 항목별 금액 숫자패드 */}
+      {/* 항목별 메뉴 금액 숫자패드 */}
       <Numpad
-        open={padItem !== null}
-        amount={padItem !== null ? (items[padItem]?.amount ?? 0) : 0}
+        open={padTarget !== null}
+        amount={padTarget ? (rounds[padTarget.r]?.items[padTarget.i]?.amount ?? 0) : 0}
         onChange={(amt) => {
-          if (padItem !== null) setItemAmount(padItem, amt)
+          if (padTarget) patchItem(padTarget.r, padTarget.i, { amount: amt })
         }}
-        onClose={() => setPadItem(null)}
+        onClose={() => setPadTarget(null)}
       />
       <LoginSheet open={loginPrompt} onClose={() => setLoginPrompt(false)} onKakao={goLogin} />
     </main>

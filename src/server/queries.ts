@@ -99,9 +99,41 @@ export async function createQuickSettle(
   return { slug }
 }
 
+/** 차수(rounds)를 RPC가 받는 flat 항목 배열로. 항목마다 도메인 분담(paidBy=차수 결제자, 단위·전역 흡수자)
+ *  + round 인덱스(RPC가 차수별 bill_id로 묶음). 생성·수정 공용. */
+function buildItemizedRpcItems(
+  input: {
+    rounds: { payerIndex: number; items: { description?: string; amount: number; participants: number[] }[] }[]
+    unit: number
+    absorberIndex?: number
+  },
+  memberCount: number,
+): Json[] {
+  const absorber = input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined
+  const items: Json[] = []
+  input.rounds.forEach((round, r) => {
+    round.items.forEach((it) => {
+      // 참여자 인덱스를 id로 써서 splitByWeights(weight 1) → 반환 순서 = 참여자 순서.
+      const weights = it.participants.map((idx) => ({ memberId: String(idx), weight: 1 }))
+      const shares = splitByWeights(it.amount, weights, { paidBy: String(round.payerIndex), unit: input.unit, absorber })
+      // 멤버 정렬 정수배열로 펼침(미참여자 0). RPC가 합 == amount 재검증.
+      const aligned = Array.from({ length: memberCount }, () => 0)
+      for (const s of shares) aligned[Number(s.memberId)] = s.amount
+      items.push({
+        description: it.description ?? '',
+        amount: it.amount,
+        paid_by_index: round.payerIndex,
+        shares: aligned,
+        round: r, // RPC가 같은 round끼리 같은 bill_id(=한 자리)로 묶음
+      })
+    })
+  })
+  return items
+}
+
 /**
- * 항목별 정산: 영수증(여러 항목)을 RPC로 원자 생성. 항목별 분담은 도메인(splitByWeights)에서 계산.
- * 결제자는 영수증 단위 1명(payerIndex). 각 항목은 참여자만 균등 분담(미참여자 0).
+ * 항목별 정산: 차수(round) 묶음을 RPC로 원자 생성. 차수마다 낸 사람 1명, 차수 안 항목별 참여자.
+ * 분담은 도메인(splitByWeights), 차수 묶음은 RPC가 bill_id로(0011).
  */
 export async function addItemizedBill(
   input: ItemizedBillInput,
@@ -111,29 +143,10 @@ export async function addItemizedBill(
   const slug = nanoid(21)
   const memberCount = input.members.length
 
-  // 항목마다: 단위 반올림 내림 + 전역 흡수자(그 항목 참여자일 때만, 아니면 자동) + **낸 사람도 항목별**.
-  const items = input.items.map((it): Json => {
-    // 참여자 인덱스를 id로 써서 splitByWeights(weight 1) → 반환 순서 = 참여자 순서. paidBy=그 항목 낸 사람(tie-break).
-    const weights = it.participants.map((idx) => ({ memberId: String(idx), weight: 1 }))
-    const shares = splitByWeights(it.amount, weights, {
-      paidBy: String(it.payerIndex),
-      unit: input.unit,
-      absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
-    })
-    // 멤버 정렬 정수배열로 펼침(미참여자 0). RPC가 합 == amount 재검증.
-    const aligned = Array.from({ length: memberCount }, () => 0)
-    for (const s of shares) aligned[Number(s.memberId)] = s.amount
-    return {
-      description: it.description ?? '',
-      amount: it.amount,
-      paid_by_index: it.payerIndex,
-      shares: aligned,
-    }
-  })
-
+  const items = buildItemizedRpcItems(input, memberCount)
   const name =
     input.name?.trim() ||
-    input.items.find((it) => it.description?.trim())?.description?.trim() ||
+    input.rounds[0]?.items.find((it) => it.description?.trim())?.description?.trim() ||
     '항목별 정산'
 
   const { error } = await supa.rpc('add_itemized_bill', {
@@ -196,26 +209,10 @@ export async function updateItemizedBill(
   const supa = getAdminClient()
   const memberCount = input.members.length
 
-  const items = input.items.map((it): Json => {
-    const weights = it.participants.map((idx) => ({ memberId: String(idx), weight: 1 }))
-    const shares = splitByWeights(it.amount, weights, {
-      paidBy: String(it.payerIndex), // 항목별 낸 사람
-      unit: input.unit,
-      absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
-    })
-    const aligned = Array.from({ length: memberCount }, () => 0)
-    for (const s of shares) aligned[Number(s.memberId)] = s.amount
-    return {
-      description: it.description ?? '',
-      amount: it.amount,
-      paid_by_index: it.payerIndex,
-      shares: aligned,
-    }
-  })
-
+  const items = buildItemizedRpcItems(input, memberCount)
   const name =
     input.name?.trim() ||
-    input.items.find((it) => it.description?.trim())?.description?.trim() ||
+    input.rounds[0]?.items.find((it) => it.description?.trim())?.description?.trim() ||
     '항목별 정산'
 
   const { error } = await supa.rpc('update_itemized_bill', {
@@ -327,12 +324,17 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
 // 정규화된 DB 행을 만들기 폼 모양으로 되살린다. 모드=split_type('weighted'=항목별), 계좌=멤버0.
 // unit/absorber는 저장 안 됨(계산된 분담만 있음) → 폼은 '안 함'으로 시작, 사용자가 다시 고름(ADR-022).
 
-/** 항목별 수정 시 항목 1개(이름·금액·참여자 플래그·낸 사람 인덱스, members 길이). */
+/** 항목별 수정 시 항목(메뉴) 1개(이름·금액·참여자 플래그, members 길이). */
 export interface EditableItem {
   name: string
   amount: number
   among: boolean[]
-  payer: number // 이 항목 낸 사람의 멤버 인덱스
+}
+
+/** 항목별 수정 시 차수(자리) 1개 — 낸 사람 + 그 안의 항목(메뉴)들. */
+export interface EditableRound {
+  payer: number // 이 차수 낸 사람의 멤버 인덱스
+  items: EditableItem[]
 }
 
 /** 수정 폼이 그대로 채울 수 있는 평범한 형태. ownerId로 라우트가 소유자 게이트. */
@@ -343,9 +345,9 @@ export interface EditableGroup {
   eventDate: string | null
   mode: 'quick' | 'items'
   members: string[]
-  payerIndex: number
-  amount: number // quick=단일 지출 금액. items=0(항목으로 표현).
-  items: EditableItem[]
+  payerIndex: number // quick 낸 사람
+  amount: number // quick=단일 지출 금액. items=0(차수로 표현).
+  rounds: EditableRound[] // items 모드의 차수 묶음
   account: { bankName: string; accountNo: string; accountHolder: string } | null
   hasSettlements: boolean // '보냈어요' 기록 존재 → 수정 시 초기화 경고.
 }
@@ -369,7 +371,7 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
       .order('created_at'),
     supa
       .from('expenses')
-      .select('id, description, amount, paid_by, split_type')
+      .select('id, description, amount, paid_by, split_type, bill_id')
       .eq('group_id', group.id)
       .order('created_at'),
     supa.from('settlements').select('id').eq('group_id', group.id).limit(1),
@@ -394,18 +396,29 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
   const payerIndex = expenses.length ? Math.max(0, memberIds.indexOf(expenses[0].paid_by)) : 0
 
   let amount = 0
-  let items: EditableItem[] = []
+  let rounds: EditableRound[] = []
   if (isItemized) {
-    items = expenses.map((e) => {
+    // 차수 재구성: (bill_id, paid_by)로 묶음(같은 자리 = 같은 bill_id + 같은 결제자). 첫 등장 순서 유지.
+    // (옛 데이터: 한 bill_id에 결제자 섞여 있어도 결제자별로 갈라져 안전.)
+    const byKey = new Map<string, EditableRound>()
+    const order: string[] = []
+    for (const e of expenses) {
+      const key = `${e.bill_id ?? ''}|${e.paid_by}`
+      let round = byKey.get(key)
+      if (!round) {
+        round = { payer: Math.max(0, memberIds.indexOf(e.paid_by)), items: [] }
+        byKey.set(key, round)
+        order.push(key)
+      }
       const set = partsByExpense.get(e.id) ?? new Set<string>()
-      return {
+      round.items.push({
         // RPC가 빈 설명을 '항목'으로 저장 → 폼엔 빈칸으로(placeholder 표시).
         name: e.description === '항목' ? '' : e.description,
         amount: e.amount,
         among: memberIds.map((id) => set.has(id)),
-        payer: Math.max(0, memberIds.indexOf(e.paid_by)), // 항목별 낸 사람
-      }
-    })
+      })
+    }
+    rounds = order.map((k) => byKey.get(k)!)
   } else {
     amount = expenses.length ? expenses[0].amount : 0
   }
@@ -426,7 +439,7 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
     members: members.map((m) => m.name),
     payerIndex,
     amount,
-    items,
+    rounds,
     account,
     hasSettlements: (settlementsRes.data ?? []).length > 0,
   }
