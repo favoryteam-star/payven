@@ -233,21 +233,21 @@ export function SettleBoard({
 
   // ── 신원 선택 UI(친구 모드) ─────────────────────────────────────
   const identityPrompt = (
-    <div className="mb-5 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-      <p className="mb-3 text-sm font-semibold">이 정산에서 당신은 누구예요?</p>
+    <div className="mb-5 rounded-2xl border border-brand/30 bg-brand/5 p-4 dark:border-brand/25 dark:bg-brand/10">
+      <p className="text-[15px] font-bold">이 정산에서 당신은 누구예요?</p>
+      <p className="mb-3 mt-1 text-xs text-neutral-500 dark:text-neutral-400">고르면 내가 보낼(받을) 금액만 크게 콕 집어 보여드려요</p>
       <div className="flex flex-wrap gap-2" role="group" aria-label="나를 선택">
         {members.map((m) => (
           <button
             key={m.id}
             type="button"
             onClick={() => pick(m.id)}
-            className="rounded-full border border-neutral-200 px-4 py-2.5 text-sm font-medium transition active:scale-95 hover:border-brand hover:text-brand dark:border-neutral-700"
+            className="rounded-full border border-brand/40 bg-white px-4 py-2.5 text-sm font-medium text-neutral-800 transition active:scale-95 hover:bg-brand hover:text-white dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-brand"
           >
             {m.name}
           </button>
         ))}
       </div>
-      <p className="mt-2.5 text-xs text-neutral-500 dark:text-neutral-400">고르면 내가 보낼(받을) 것만 콕 집어 보여줘요</p>
     </div>
   )
 

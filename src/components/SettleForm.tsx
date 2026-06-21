@@ -17,7 +17,7 @@ import { IcoBack, IcoPlus } from '@/components/icons'
 import { Wordmark } from '@/components/Logo'
 import { ModeChips, type SettleMode } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
-import { AccountField, EMPTY_INLINE, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
+import { AccountField, EMPTY_INLINE, NEW_ACCOUNT, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 
 // 메뉴(항목) 1개. among = 멤버 길이의 참여 여부(기본 전원).
 export type RoundItem = { name: string; amount: number; among: boolean[] }
@@ -128,7 +128,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     const match = accounts.find(
       (a) => a.bankName === initial.account!.bankName && norm(a.accountNo) === norm(initial.account!.accountNo),
     )
-    if (match) setAccountId(match.id)
+    // 저장 계좌에 같은 게 있으면 그 칩, 없으면 '새 계좌'로 — 시드된 인라인 계좌가 그대로 표시·사용되게(옛 일회성 계좌 보존).
+    setAccountId(match ? match.id : NEW_ACCOUNT)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts])
 
@@ -531,9 +532,10 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                 key={r}
                 className="rounded-2xl border border-neutral-100 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-[15px] font-semibold">{r + 1}차</span>
-                  {rounds.length > 1 && (
+                {/* 차수 라벨·삭제는 자리가 2개 이상일 때만(1개뿐이면 '1차'가 모임 규모 과장). */}
+                {rounds.length > 1 && (
+                  <div className="mb-0.5 flex items-center justify-between">
+                    <span className="text-[15px] font-semibold">{r + 1}차</span>
                     <button
                       onClick={() => removeRound(r)}
                       aria-label="차수 삭제"
@@ -541,8 +543,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                     >
                       ✕
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* 차수 낸 사람 */}
                 {filledIdx.length >= 1 && (
@@ -626,7 +628,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                         onClick={() => toggleRoundSplit(r)}
                         className="-mx-1.5 rounded-lg px-1.5 py-2 text-sm text-neutral-500 underline-offset-2 transition hover:underline dark:text-neutral-400"
                       >
-                        간단히
+                        메뉴 합치기
                       </button>
                     </div>
                   </div>
@@ -658,7 +660,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                   memberRefs.current[i] = el
                 }}
                 value={m}
-                placeholder={i === 0 ? '나' : `친구 ${i}`}
+                placeholder={i === 0 ? '내 이름' : '친구 이름'}
                 aria-label={i === 0 ? '내 이름' : `친구 ${i} 이름`}
                 onChange={(e) => setMember(i, e.target.value)}
                 onKeyDown={(e) => onMemberKeyDown(e, i)}
@@ -818,42 +820,20 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         </section>
       )}
 
-      {/* 받을 계좌 (공유). 저장계좌 있으면 칩, 없으면 인라인 입력(선택). */}
-      {accounts !== null && (
-        <section ref={refFor('account')} className="mb-5">
-          <p className="mb-2 text-sm font-medium text-neutral-500">
-            어디로 받을까요? <span className="font-normal text-neutral-500 dark:text-neutral-400">(선택)</span>
-          </p>
-          <AccountField
-            accounts={accounts}
-            accountId={accountChipValue}
-            onSelect={setAccountId}
-            inline={acct}
-            onInline={setAcct}
-          />
-          {accounts.length === 0 && (
-            <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
-              입력하면 정산에 표시되고, 다음부턴 자동으로 채워져요. 비워두면 계좌 없이 정산돼요.
-            </p>
-          )}
-          {errorField === 'account' && error && <p className="mt-1.5 text-sm text-red-500">{error}</p>}
-        </section>
-      )}
-
-      {/* 미리보기 — 1/N은 1인당(딱 떨어질 때), 항목별은 합계+인별 */}
+      {/* 미리보기 — 돈 관련 입력(금액·참여·낸 사람·단위) 바로 뒤, 날짜·계좌 앞에서 결과 먼저 확인. */}
       {mode === 'quick'
         ? perPerson > 0 &&
           leftover === 0 && (
-            <div className="mb-4 rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
+            <div className="mb-5 rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
               <span className="text-sm text-neutral-500">1인당 </span>
-              <span className="num text-lg font-bold text-brand">{formatWon(quickBase)}</span>
+              <span className="num text-lg font-bold text-brand-700 dark:text-brand">{formatWon(quickBase)}</span>
             </div>
           )
         : total > 0 && (
             <section className="mb-5 rounded-2xl bg-brand-50 px-4 py-3 dark:bg-brand-600/15">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-medium text-neutral-500">합계</span>
-                <span className="num text-lg font-bold text-brand">{formatWon(total)}</span>
+                <span className="num text-lg font-bold text-brand-700 dark:text-brand">{formatWon(total)}</span>
               </div>
               {tabs.some((t) => t > 0) && (
                 <div className="mt-2 flex flex-col gap-1 border-t border-brand-100 pt-2 dark:border-brand-600/20">
@@ -867,6 +847,28 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
               )}
             </section>
           )}
+
+      {/* 받을 계좌 (공유). 저장계좌 있으면 칩+'새 계좌', 없으면 인라인 입력(선택). */}
+      {accounts !== null && (
+        <section ref={refFor('account')} className="mb-5">
+          <p className="mb-2 text-sm font-medium text-neutral-500">
+            어디로 받을까요? <span className="font-normal text-neutral-500 dark:text-neutral-400">(선택)</span>
+          </p>
+          <AccountField
+            accounts={accounts}
+            accountId={accountChipValue}
+            onSelect={setAccountId}
+            inline={acct}
+            onInline={setAcct}
+          />
+          {(accounts.length === 0 || accountChipValue === NEW_ACCOUNT) && (
+            <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+              입력하면 정산에 표시되고, 다음부턴 자동으로 채워져요. 비워두면 계좌 없이 정산돼요.
+            </p>
+          )}
+          {errorField === 'account' && error && <p className="mt-1.5 text-sm text-red-500">{error}</p>}
+        </section>
+      )}
 
       {error && !errorField && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
 

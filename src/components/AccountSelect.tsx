@@ -12,6 +12,8 @@ export type SavedAccountDTO = Awaited<ReturnType<typeof getMyAccountsAction>>[nu
 // 저장 계좌가 없을 때 폼에서 직접 입력하는 계좌(은행/계좌번호/예금주).
 export type InlineAcct = { bank: string; no: string; holder: string }
 export const EMPTY_INLINE: InlineAcct = { bank: BANKS[0], no: '', holder: '' }
+// 저장 계좌가 있어도 '새 계좌'를 직접 입력하려고 고른 상태(accountId 센티넬).
+export const NEW_ACCOUNT = 'new'
 
 /** 내 저장 계좌 조회 훅. null=로딩중, []=없음 또는 미로그인. */
 export function useMyAccounts(): SavedAccountDTO[] | null {
@@ -60,7 +62,8 @@ export function resolveAccount(
   accountId: string | undefined,
   inline: InlineAcct,
 ): ResolvedAccount {
-  if (accounts && accounts.length > 0) {
+  // 저장 계좌 중에서 고른 경우('새 계좌'가 아님). 'new'면 아래 인라인 입력으로 떨어진다.
+  if (accounts && accounts.length > 0 && accountId !== NEW_ACCOUNT) {
     const chosen =
       accountId === undefined
         ? (accounts.find((a) => a.isDefault) ?? accounts[0])
@@ -74,18 +77,12 @@ export function resolveAccount(
       saveAccount: false,
     }
   }
-  // 저장 계좌 없음 → 인라인 입력(선택). 둘 다 비면 계좌 없이 정산. accountNo는 숫자만 저장.
+  // 인라인 입력(저장 계좌가 없거나 '새 계좌' 선택). accountNo는 숫자만.
   const no = onlyDigits(inline.no)
   const holder = inline.holder.trim()
-  if (!no && !holder) return { account: undefined, saveAccount: false }
   const valid = holder.length >= 1 && holder.length <= 20 && no.length >= 6 && no.length <= 20
-  if (!valid) {
-    return {
-      account: undefined,
-      saveAccount: false,
-      error: '계좌번호(숫자 6~20자리)와 예금주를 확인해 주세요. 비워두면 계좌 없이 정산돼요.',
-    }
-  }
+  // 부분만 채웠으면(번호만/예금주만·자릿수 미달) 막지 않고 계좌 없이 진행 — '(선택)' 약속대로(에러 X, UI가 안내).
+  if (!valid) return { account: undefined, saveAccount: false }
   return { account: { bankName: inline.bank, accountNo: no, accountHolder: holder }, saveAccount: true }
 }
 
@@ -109,41 +106,61 @@ export function AccountField({
   inline: InlineAcct
   onInline: (v: InlineAcct) => void
 }) {
-  if (accounts.length > 0) {
-    const chip = (active: boolean) =>
-      'rounded-full px-4 py-2 text-sm font-medium transition ' +
-      (active
-        ? 'bg-brand text-white'
-        : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
-    return (
-      <div className="flex flex-wrap gap-2">
-        {accounts.map((a) => (
-          <button key={a.id} type="button" onClick={() => onSelect(a.id)} className={chip(accountId === a.id)}>
-            {chipLabel(a)}
-          </button>
-        ))}
-        <button type="button" onClick={() => onSelect('')} className={chip(accountId === '')}>
-          없음
-        </button>
-      </div>
-    )
-  }
+  const hasSaved = accounts.length > 0
+  const showInline = !hasSaved || accountId === NEW_ACCOUNT
+  const chip = (active: boolean) =>
+    'rounded-full px-4 py-2 text-sm font-medium transition active:scale-95 ' +
+    (active
+      ? 'bg-brand text-white'
+      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+
+  // 부분만 채웠으면(번호만/예금주만·자릿수 미달) 안내만 하고 막지 않음(resolveAccount가 계좌 없이 진행).
+  const noD = onlyDigits(inline.no)
+  const holderD = inline.holder.trim()
+  const partial = (!!noD || !!holderD) && !(noD.length >= 6 && holderD.length >= 1)
+
   return (
-    <div className="flex flex-col gap-2">
-      <BankSelect value={inline.bank} onChange={(b) => onInline({ ...inline, bank: b })} />
-      <input
-        value={formatAccountNo(inline.bank, inline.no)}
-        onChange={(e) => onInline({ ...inline, no: onlyDigits(e.target.value) })}
-        placeholder="계좌번호 (숫자만)"
-        inputMode="numeric"
-        className={`num ${fieldCls}`}
-      />
-      <input
-        value={inline.holder}
-        onChange={(e) => onInline({ ...inline, holder: e.target.value })}
-        placeholder="예금주"
-        className={fieldCls}
-      />
+    <div className="flex flex-col gap-2.5">
+      {hasSaved && (
+        <div className="flex flex-wrap gap-2">
+          {accounts.map((a) => (
+            <button key={a.id} type="button" onClick={() => onSelect(a.id)} className={chip(accountId === a.id)}>
+              {chipLabel(a)}
+            </button>
+          ))}
+          <button type="button" onClick={() => onSelect(NEW_ACCOUNT)} className={chip(accountId === NEW_ACCOUNT)}>
+            + 새 계좌
+          </button>
+          <button type="button" onClick={() => onSelect('')} className={chip(accountId === '')}>
+            없음
+          </button>
+        </div>
+      )}
+      {showInline && (
+        <div className="flex flex-col gap-2">
+          <BankSelect value={inline.bank} onChange={(b) => onInline({ ...inline, bank: b })} />
+          <input
+            value={formatAccountNo(inline.bank, inline.no)}
+            onChange={(e) => onInline({ ...inline, no: onlyDigits(e.target.value) })}
+            placeholder="계좌번호 (숫자만)"
+            aria-label="계좌번호"
+            inputMode="numeric"
+            className={`num ${fieldCls}`}
+          />
+          <input
+            value={inline.holder}
+            onChange={(e) => onInline({ ...inline, holder: e.target.value })}
+            placeholder="예금주"
+            aria-label="예금주"
+            className={fieldCls}
+          />
+          {partial && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              계좌번호와 예금주를 모두 넣어야 계좌가 들어가요. 비워두면 계좌 없이 정산돼요.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
