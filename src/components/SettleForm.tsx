@@ -19,8 +19,9 @@ import { ModeChips, type SettleMode } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
 import { AccountField, EMPTY_INLINE, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 
-// 항목(메뉴) 1개. among = 멤버 배열과 같은 길이의 참여 여부(기본 전원).
-export type Item = { name: string; amount: number; among: boolean[] }
+// 항목(=건: 메뉴 한 줄, 또는 1차/2차 같은 한 자리) 1개. among = 멤버 길이의 참여 여부(기본 전원).
+// payer = 이 건을 낸 사람의 멤버 인덱스(건마다 다를 수 있음 — 1차 나, 2차 친구).
+export type Item = { name: string; amount: number; among: boolean[]; payer: number }
 
 // 수정 모드 프리필. editSlug가 있으면 '만들기'가 아니라 '교체 수정'으로 동작.
 export interface SettleFormInitial {
@@ -182,6 +183,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const filledIdx = members.map((n, i) => (n.trim() ? i : -1)).filter((i) => i >= 0)
   // 결제자가 비워졌거나 범위를 벗어나면 첫 채워진 멤버로 — 표시·계산·제출의 단일 출처.
   const effectivePayer = filledIdx.includes(payerIndex) ? payerIndex : (filledIdx[0] ?? 0)
+  // 항목별: 그 항목 낸 사람이 비었거나 범위 밖이면 첫 채워진 멤버로(표시·계산·제출 단일 출처).
+  const effItemPayer = (it: Item) => (filledIdx.includes(it.payer) ? it.payer : (filledIdx[0] ?? 0))
   // 최근 참여자 빠른 추가: 이미 들어간 이름은 제외.
   const currentNames = new Set(members.map((m) => m.trim()).filter(Boolean))
   const memberSuggestions = recentNames.filter((n) => !currentNames.has(n)).slice(0, 8)
@@ -191,20 +194,19 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const quickBase = perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
   const quickLeftover = perPerson > 0 ? amount - quickBase * filled.length : 0
 
-  // 항목별: 인별 합계(단위·흡수자 반영, 미리보기=제출과 동일 도메인 호출) + 남는 금액 합.
+  // 항목별: 인별 합계(단위·흡수자 반영, 미리보기=제출과 동일 도메인 호출) + 남는 금액 합. 낸 사람은 항목별.
   const total = items.reduce((s, it) => s + (it.amount > 0 ? it.amount : 0), 0)
-  const splitOpts = {
-    paidBy: String(effectivePayer),
-    unit,
-    absorber: absorberIndex !== null ? String(absorberIndex) : undefined,
-  }
   const tabs = filledIdx.map(() => 0)
   let itemsLeftover = 0
   for (const it of items) {
     if (it.amount <= 0) continue
     const parts = filledIdx.filter((fi) => it.among[fi])
     if (parts.length === 0) continue
-    const shares = equalSplit(it.amount, parts.map(String), splitOpts)
+    const shares = equalSplit(it.amount, parts.map(String), {
+      paidBy: String(effItemPayer(it)),
+      unit,
+      absorber: absorberIndex !== null ? String(absorberIndex) : undefined,
+    })
     const byId = new Map(shares.map((s) => [s.memberId, s.amount]))
     for (const oi of parts) tabs[filledIdx.indexOf(oi)] += byId.get(String(oi)) ?? 0
     itemsLeftover += it.amount - Math.floor(it.amount / (parts.length * unit)) * unit * parts.length
@@ -234,7 +236,13 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const removeMember = (i: number) => {
     if (members.length <= 2) return
     setMembers((p) => p.filter((_, idx) => idx !== i))
-    setItems((p) => p.map((it) => ({ ...it, among: it.among.filter((_, idx) => idx !== i) })))
+    setItems((p) =>
+      p.map((it) => ({
+        ...it,
+        among: it.among.filter((_, idx) => idx !== i),
+        payer: it.payer === i ? 0 : it.payer > i ? it.payer - 1 : it.payer,
+      })),
+    )
     setPayerIndex((p) => (p === i ? 0 : p > i ? p - 1 : p))
     setAbsorberIndex((p) => (p === null ? null : p === i ? null : p > i ? p - 1 : p))
   }
@@ -250,10 +258,11 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   // ── 항목 ──
   const addItem = () =>
     setItems((p) => {
-      // 새 항목은 직전 항목의 참여자를 상속(없으면 전원)
+      // 새 항목은 직전 항목의 참여자·낸 사람을 상속(없으면 전원·나) — 한 명이 다 내면 매번 안 바꿔도 됨.
       const base = p.length ? [...p[p.length - 1].among] : members.map(() => true)
       while (base.length < members.length) base.push(true)
-      return [...p, { name: '', amount: 0, among: base.slice(0, members.length) }]
+      const payer = p.length ? p[p.length - 1].payer : 0
+      return [...p, { name: '', amount: 0, among: base.slice(0, members.length), payer }]
     })
   const removeItem = (idx: number) => {
     setItems((p) => p.filter((_, i) => i !== idx))
@@ -263,6 +272,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     setItems((p) => p.map((it, i) => (i === idx ? { ...it, name: v } : it)))
   const setItemAmount = (idx: number, amt: number) =>
     setItems((p) => p.map((it, i) => (i === idx ? { ...it, amount: amt } : it)))
+  const setItemPayer = (idx: number, mi: number) =>
+    setItems((p) => p.map((it, i) => (i === idx ? { ...it, payer: mi } : it)))
   const toggleAmong = (idx: number, mi: number) =>
     setItems((p) =>
       p.map((it, i) => {
@@ -283,8 +294,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     const names = filledIdx.map((i) => members[i].trim())
     if (names.length < 2) return setError('최소 2명이 필요해요')
 
-    // 모드별 메인 입력 검증 + 항목별 payload 구성
-    const payload: { description?: string; amount: number; participants: number[] }[] = []
+    // 모드별 메인 입력 검증 + 항목별 payload 구성(항목마다 낸 사람 포함)
+    const payload: { description?: string; amount: number; participants: number[]; payerIndex: number }[] = []
     if (mode === 'quick') {
       if (amount <= 0) return setError('금액을 입력해 주세요')
     } else {
@@ -296,11 +307,13 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
           .filter((x) => it.among[x.oi])
           .map((x) => x.pos)
         if (participants.length === 0) return setError('모든 항목에 참여자가 1명 이상 필요해요')
-        payload.push({ description: it.name.trim() || undefined, amount: it.amount, participants })
+        // 항목 낸 사람을 filled 위치(서버가 받는 멤버 배열 기준)로 변환.
+        const payerPos = Math.max(0, filledIdx.indexOf(effItemPayer(it)))
+        payload.push({ description: it.name.trim() || undefined, amount: it.amount, participants, payerIndex: payerPos })
       }
     }
 
-    const payer = Math.max(0, filledIdx.indexOf(effectivePayer))
+    const payer = Math.max(0, filledIdx.indexOf(effectivePayer)) // 1/N 낸 사람
     // 안 나눠떨어지면(단위 무관, 안 함의 1~2원 포함) 남는 금액 받을 사람을 골라야. filled 위치로 변환.
     let absorberIdx: number | undefined
     if (leftover > 0) {
@@ -315,10 +328,10 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
     startTransition(async () => {
       try {
+        // 공유 필드. 낸 사람은 1/N=전체 1명(payerIndex), 항목별=항목마다(payload에 포함)라 여기 없음.
         const common = {
           name: title.trim() || TITLES[mode],
           members: names,
-          payerIndex: payer,
           unit,
           absorberIndex: absorberIdx,
           eventDate: eventDate || undefined,
@@ -327,10 +340,10 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         }
         const res = isEdit
           ? mode === 'quick'
-            ? await updateQuickSettleAction({ slug: editSlug, amount, ...common })
+            ? await updateQuickSettleAction({ slug: editSlug, amount, payerIndex: payer, ...common })
             : await updateItemizedBillAction({ slug: editSlug, items: payload, ...common })
           : mode === 'quick'
-            ? await quickSettleAction({ amount, ...common })
+            ? await quickSettleAction({ amount, payerIndex: payer, ...common })
             : await addItemizedBillAction({ items: payload, ...common })
         if ('needLogin' in res) {
           // 만들기 = 안내 시트(입력값 보존). 수정 = 세션 만료 → 로그인 후 수정 화면으로 복귀.
@@ -353,6 +366,12 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     (active
       ? 'bg-brand text-white'
       : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500')
+  // 항목 '낸 사람'은 단일 선택이라 미선택도 안 흐리게(참여 토글과 구분).
+  const payerChip = (active: boolean) =>
+    'rounded-full px-3 py-1.5 text-sm font-medium transition ' +
+    (active
+      ? 'bg-brand text-white'
+      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
 
   return (
     <main
@@ -453,12 +472,27 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                   </button>
                 </div>
                 {filledIdx.length >= 1 && (
-                  <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    {filledIdx.map((fi) => (
-                      <button key={fi} onClick={() => toggleAmong(idx, fi)} className={partChip(it.among[fi])}>
-                        {members[fi].trim()}
-                      </button>
-                    ))}
+                  <div className="mt-2.5 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="w-12 shrink-0 text-xs text-neutral-400">참여</span>
+                      {filledIdx.map((fi) => (
+                        <button key={fi} onClick={() => toggleAmong(idx, fi)} className={partChip(it.among[fi])}>
+                          {members[fi].trim()}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="w-12 shrink-0 text-xs text-neutral-400">낸 사람</span>
+                      {filledIdx.map((fi) => (
+                        <button
+                          key={fi}
+                          onClick={() => setItemPayer(idx, fi)}
+                          className={payerChip(effItemPayer(it) === fi)}
+                        >
+                          {members[fi].trim()}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -528,8 +562,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         )}
       </section>
 
-      {/* 낸 사람 (공유) */}
-      {filledIdx.length >= 1 && (
+      {/* 낸 사람 — 1/N만(항목별은 항목 카드마다 '낸 사람'을 따로 고름). */}
+      {mode === 'quick' && filledIdx.length >= 1 && (
         <section className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">누가 냈어요?</p>
           <div className="flex flex-wrap gap-2">

@@ -111,23 +111,22 @@ export async function addItemizedBill(
   const slug = nanoid(21)
   const memberCount = input.members.length
 
-  // 항목별 단위 반올림: 항목마다 내림 + 전역 흡수자(그 항목 참여자일 때만 적용, 아니면 자동 분배).
-  const splitOpts = {
-    paidBy: String(input.payerIndex),
-    unit: input.unit,
-    absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
-  }
+  // 항목마다: 단위 반올림 내림 + 전역 흡수자(그 항목 참여자일 때만, 아니면 자동) + **낸 사람도 항목별**.
   const items = input.items.map((it): Json => {
-    // 참여자 인덱스를 id로 써서 splitByWeights(weight 1) → 반환 순서 = 참여자 순서
+    // 참여자 인덱스를 id로 써서 splitByWeights(weight 1) → 반환 순서 = 참여자 순서. paidBy=그 항목 낸 사람(tie-break).
     const weights = it.participants.map((idx) => ({ memberId: String(idx), weight: 1 }))
-    const shares = splitByWeights(it.amount, weights, splitOpts)
+    const shares = splitByWeights(it.amount, weights, {
+      paidBy: String(it.payerIndex),
+      unit: input.unit,
+      absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
+    })
     // 멤버 정렬 정수배열로 펼침(미참여자 0). RPC가 합 == amount 재검증.
     const aligned = Array.from({ length: memberCount }, () => 0)
     for (const s of shares) aligned[Number(s.memberId)] = s.amount
     return {
       description: it.description ?? '',
       amount: it.amount,
-      paid_by_index: input.payerIndex,
+      paid_by_index: it.payerIndex,
       shares: aligned,
     }
   })
@@ -197,20 +196,19 @@ export async function updateItemizedBill(
   const supa = getAdminClient()
   const memberCount = input.members.length
 
-  const splitOpts = {
-    paidBy: String(input.payerIndex),
-    unit: input.unit,
-    absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
-  }
   const items = input.items.map((it): Json => {
     const weights = it.participants.map((idx) => ({ memberId: String(idx), weight: 1 }))
-    const shares = splitByWeights(it.amount, weights, splitOpts)
+    const shares = splitByWeights(it.amount, weights, {
+      paidBy: String(it.payerIndex), // 항목별 낸 사람
+      unit: input.unit,
+      absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
+    })
     const aligned = Array.from({ length: memberCount }, () => 0)
     for (const s of shares) aligned[Number(s.memberId)] = s.amount
     return {
       description: it.description ?? '',
       amount: it.amount,
-      paid_by_index: input.payerIndex,
+      paid_by_index: it.payerIndex,
       shares: aligned,
     }
   })
@@ -329,11 +327,12 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
 // 정규화된 DB 행을 만들기 폼 모양으로 되살린다. 모드=split_type('weighted'=항목별), 계좌=멤버0.
 // unit/absorber는 저장 안 됨(계산된 분담만 있음) → 폼은 '안 함'으로 시작, 사용자가 다시 고름(ADR-022).
 
-/** 항목별 수정 시 항목 1개(이름·금액·참여자 플래그, members 길이). */
+/** 항목별 수정 시 항목 1개(이름·금액·참여자 플래그·낸 사람 인덱스, members 길이). */
 export interface EditableItem {
   name: string
   amount: number
   among: boolean[]
+  payer: number // 이 항목 낸 사람의 멤버 인덱스
 }
 
 /** 수정 폼이 그대로 채울 수 있는 평범한 형태. ownerId로 라우트가 소유자 게이트. */
@@ -404,6 +403,7 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
         name: e.description === '항목' ? '' : e.description,
         amount: e.amount,
         among: memberIds.map((id) => set.has(id)),
+        payer: Math.max(0, memberIds.indexOf(e.paid_by)), // 항목별 낸 사람
       }
     })
   } else {

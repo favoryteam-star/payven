@@ -63,19 +63,23 @@ function refineMemberBounds(
   }
 }
 
-// 항목별: 멤버 범위 + 각 항목 참여자 인덱스 범위.
+// 항목별: 남는 금액 받을 사람 범위 + 각 항목의 낸 사람·참여자 인덱스 범위(항목마다 결제자가 다를 수 있음).
 function refineItemizedBounds(
   val: {
     members: string[]
-    payerIndex: number
     absorberIndex?: number | undefined
-    items: { participants: number[] }[]
+    items: { payerIndex: number; participants: number[] }[]
   },
   ctx: z.RefinementCtx,
 ): void {
-  refineMemberBounds(val, ctx)
   const n = val.members.length
+  if (val.absorberIndex !== undefined && val.absorberIndex >= n) {
+    ctx.addIssue({ code: 'custom', message: '남는 금액 받을 사람이 범위를 벗어났습니다', path: ['absorberIndex'] })
+  }
   val.items.forEach((it, i) => {
+    if (it.payerIndex >= n) {
+      ctx.addIssue({ code: 'custom', message: '낸 사람 인덱스가 범위를 벗어났습니다', path: ['items', i, 'payerIndex'] })
+    }
     it.participants.forEach((p, j) => {
       if (p >= n) {
         ctx.addIssue({
@@ -117,21 +121,21 @@ export const updateQuickSettleSchema = quickSettleObject
   .superRefine(refineMemberBounds)
 export type UpdateQuickSettleInput = z.infer<typeof updateQuickSettleSchema>
 
-// 항목별 정산 입력. 영수증 1개 = 멤버 + 항목 N개. 결제자는 영수증 단위 1명(payerIndex).
-// 항목마다 participants(이 항목을 나눠 가질 멤버 인덱스)만 받고, 분담은 서버에서 splitByWeights로 계산.
+// 항목별 정산 입력. 한 정산 = 멤버 + 항목(=건) N개. **항목마다 낸 사람(payerIndex)이 다를 수 있다**
+// (1차 나·2차 친구처럼). 항목별 participants(나눠 가질 멤버 인덱스)와 payerIndex, 분담은 서버 splitByWeights.
 const itemizedBillObject = z.object({
   name: z.string().trim().max(50).optional(),
   members: z
     .array(z.string().trim().min(1, '이름을 입력해 주세요').max(20))
     .min(2, '최소 2명이 필요합니다')
     .max(30),
-  payerIndex: z.number().int().min(0),
   items: z
     .array(
       z
         .object({
           description: z.string().trim().max(40).optional(),
           amount: z.number().int().positive().max(1_000_000_000),
+          payerIndex: z.number().int().min(0), // 이 항목(건)을 낸 사람
           participants: z
             .array(z.number().int().min(0))
             .min(1, '항목에 최소 1명이 필요합니다'),

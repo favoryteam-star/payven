@@ -49,7 +49,13 @@ export default async function SettlePage({ params }: Params) {
   const accountMember = snap.members.find((m) => m.bankName && m.accountNo) ?? null
   // 맥락: 누가 결제했는지 + 언제. 기본 이름은 제목으로 안 보여줌(빠른정산/항목별 정산).
   const payerIds = [...new Set(snap.expenses.map((e) => e.paidBy))]
-  const payerLabel = payerIds.length === 1 ? displayName(payerIds[0]) : payerIds.length > 1 ? '여러 명' : null
+  // 결제자 맥락 문구. 1명이면 "{실명}님이 결제", 여러 명(1차·2차 등 항목별 다른 결제자)이면 "여러 명이 결제".
+  const payerText =
+    payerIds.length === 1
+      ? `${displayName(payerIds[0])}님이 결제`
+      : payerIds.length > 1
+        ? '여러 명이 결제'
+        : null
   // 사용자가 고른 정산 날짜(있으면) → 없으면 생성 시각으로 폴백. formatMonthDay는 'YYYY-MM-DD'도 처리.
   const dateLabel = formatMonthDay(snap.group.eventDate ?? snap.group.createdAt)
   const customName = ['빠른정산', '항목별 정산'].includes(snap.group.name) ? null : snap.group.name
@@ -90,10 +96,10 @@ export default async function SettlePage({ params }: Params) {
             <div className="num mt-1 text-4xl font-bold tracking-tight">총 {formatWon(total)}</div>
           </>
         )}
-        {(payerLabel || dateLabel) && (
+        {(payerText || dateLabel) && (
           <p className="mt-2 text-sm text-neutral-400">
-            {payerLabel && `${payerLabel}님이 결제`}
-            {payerLabel && dateLabel && ' · '}
+            {payerText}
+            {payerText && dateLabel && ' · '}
             {dateLabel}
           </p>
         )}
