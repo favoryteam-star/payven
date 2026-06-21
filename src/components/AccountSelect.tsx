@@ -52,7 +52,7 @@ export interface ResolvedAccount {
 
 /**
  * 제출 시 쓸 받을 계좌를 결정.
- * - 저장 계좌가 있으면: 선택된 칩(기본=기본계좌, ''=안 받음) → 저장 안 함(saveAccount=false)
+ * - 저장 계좌가 있으면: 선택된 칩(기본=기본계좌, ''=없음=계좌 없이) → 저장 안 함(saveAccount=false)
  * - 없으면: 인라인 입력(선택). 비우면 계좌 없이 정산. 채우면 정산에 쓰고 저장(saveAccount=true).
  */
 export function resolveAccount(
@@ -123,7 +123,7 @@ export function AccountField({
           </button>
         ))}
         <button type="button" onClick={() => onSelect('')} className={chip(accountId === '')}>
-          안 받음
+          없음
         </button>
       </div>
     )
