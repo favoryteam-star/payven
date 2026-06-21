@@ -6,6 +6,7 @@ import { formatWon } from '@/domain/money'
 import { formatMonthDay } from '@/lib/datetime'
 import { minimizeCashFlow, netBalances } from '@/domain/settle'
 import { getGroupBySlug } from '@/server/queries'
+import { getAuthUser } from '@/server/auth'
 import { ShareButton } from '@/components/ShareButton'
 import { IcoBack } from '@/components/icons'
 import { SettleBoard } from './_components/SettleBoard'
@@ -28,6 +29,11 @@ export default async function SettlePage({ params }: Params) {
   const { slug } = await params
   const snap = await loadGroup(slug)
   if (!snap) notFound()
+
+  // 전체 관리(누구의 보냈어요/취소든)는 '정산을 연 사람'만 — 로그인 + owner_id 일치로 확인.
+  // 친구(링크 공유받은 사람)는 신원만 고르고 자기 것만 관리. owner 없는 옛 정산은 막을 대상이 없어 누구나(현행).
+  const user = await getAuthUser()
+  const canManageAll = !snap.group.ownerId || (!!user && user.id === snap.group.ownerId)
 
   const memberIds = snap.members.map((m) => m.id)
   const memberById = new Map(snap.members.map((m) => [m.id, m]))
@@ -101,6 +107,7 @@ export default async function SettlePage({ params }: Params) {
         done={snap.settledTransfers}
         account={account}
         accountMemberId={accountMember?.id ?? null}
+        canManageAll={canManageAll}
       />
 
       <div className="mt-auto pt-8">
