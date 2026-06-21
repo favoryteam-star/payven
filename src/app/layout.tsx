@@ -23,7 +23,7 @@ export const viewport: Viewport = {
   themeColor: '#ffffff',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // maximumScale 고정 안 함 — 저시력 사용자가 계좌번호·금액을 핀치 줌으로 키워 볼 수 있게(WCAG 1.4.4).
   viewportFit: 'cover',
 }
 

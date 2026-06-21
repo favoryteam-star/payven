@@ -74,7 +74,7 @@ export default async function SettlePage({ params }: Params) {
     <main className="flex min-h-dvh flex-col px-5 pb-8 pt-5">
       <Link
         href="/"
-        className="-ml-1 inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+        className="-ml-1 inline-flex items-center gap-1 text-sm text-neutral-400 transition active:opacity-70 hover:text-neutral-700 dark:hover:text-neutral-200"
       >
         <IcoBack className="h-5 w-5" /> 새 정산
       </Link>
@@ -85,19 +85,19 @@ export default async function SettlePage({ params }: Params) {
         {customName ? (
           <>
             <h1 className="text-3xl font-bold tracking-tight">{customName}</h1>
-            <p className="mt-1.5 text-sm text-neutral-400">
+            <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">
               총 <span className="num font-medium text-neutral-600 dark:text-neutral-300">{formatWon(total)}</span> ·{' '}
               {memberIds.length}명
             </p>
           </>
         ) : (
           <>
-            <p className="text-sm text-neutral-400">{memberIds.length}명</p>
-            <div className="num mt-1 text-4xl font-bold tracking-tight">총 {formatWon(total)}</div>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{memberIds.length}명</p>
+            <h1 className="num mt-1 text-4xl font-bold tracking-tight">총 {formatWon(total)}</h1>
           </>
         )}
         {(payerText || dateLabel) && (
-          <p className="mt-2 text-sm text-neutral-400">
+          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
             {payerText}
             {payerText && dateLabel && ' · '}
             {dateLabel}
@@ -118,7 +118,7 @@ export default async function SettlePage({ params }: Params) {
 
       <div className="mt-auto pt-8">
         <ShareButton title={`${snap.group.name} 정산`} />
-        <p className="mt-3 text-center text-xs text-neutral-400">
+        <p className="mt-3 text-center text-xs text-neutral-500 dark:text-neutral-400">
           로그인하고 만든 정산은 내역에 자동 저장돼요
         </p>
       </div>

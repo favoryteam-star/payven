@@ -8,6 +8,7 @@ export function ShareButton({ title }: { title: string }) {
   const [done, setDone] = useState<null | 'shared' | 'copied'>(null)
 
   async function onClick() {
+    if (done) return // 1.6초 피드백 윈도우 중 중복 공유 방지
     const result = await shareUrl({ title, url: window.location.href })
     setDone(result)
     setTimeout(() => setDone(null), 1600)
@@ -16,6 +17,7 @@ export function ShareButton({ title }: { title: string }) {
   return (
     <button
       onClick={onClick}
+      disabled={done !== null}
       className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand py-4 text-[15px] font-semibold text-white shadow-sm transition active:scale-[0.99]"
     >
       {done ? <IcoCheck className="h-[18px] w-[18px]" /> : <IcoShare className="h-[18px] w-[18px]" />}

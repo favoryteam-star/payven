@@ -86,6 +86,12 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const [padTarget, setPadTarget] = useState<{ r: number; i: number } | null>(null) // 메뉴 금액 패드 대상
   // 공통
   const [error, setError] = useState<string | null>(null)
+  const [errorField, setErrorField] = useState<string | null>(null) // 에러 소속 섹션(인라인 표시·자동 스크롤)
+  // 섹션 ref — 검증 실패 시 해당 입력으로 자동 스크롤. 콜백 ref라 button/section 혼용도 타입 안전.
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
+  const refFor = (key: string) => (el: HTMLElement | null) => {
+    sectionRefs.current[key] = el
+  }
   const [loginPrompt, setLoginPrompt] = useState(false)
   const [autoSubmit, setAutoSubmit] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -331,13 +337,23 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
   function submit() {
     setError(null)
+    setErrorField(null)
+    // 검증 실패: 메시지 + 소속 섹션 기록 + 그 입력으로 부드럽게 스크롤(긴 폼에서 어디가 막혔는지 바로 보이게).
+    const fail = (field: string, msg: string) => {
+      setError(msg)
+      setErrorField(field)
+      const key = field === 'amount' || field === 'rounds' ? 'main' : field
+      requestAnimationFrame(() =>
+        sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      )
+    }
     const names = filledIdx.map((i) => members[i].trim())
-    if (names.length < 2) return setError('최소 2명이 필요해요')
+    if (names.length < 2) return fail('members', '최소 2명이 필요해요')
 
     // 모드별 메인 입력 검증 + 항목별 payload(차수→메뉴) 구성
     const payload: { payerIndex: number; items: { description?: string; amount: number; participants: number[] }[] }[] = []
     if (mode === 'quick') {
-      if (amount <= 0) return setError('금액을 입력해 주세요')
+      if (amount <= 0) return fail('amount', '금액을 입력해 주세요')
     } else {
       for (const rd of rounds) {
         const realItems = rd.items.filter((it) => it.amount > 0)
@@ -349,26 +365,26 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
             .map((oi, pos) => ({ oi, pos }))
             .filter((x) => it.among[x.oi])
             .map((x) => x.pos)
-          if (participants.length === 0) return setError('모든 항목에 참여자가 1명 이상 필요해요')
+          if (participants.length === 0) return fail('rounds', '모든 항목에 참여자가 1명 이상 필요해요')
           items.push({ description: it.name.trim() || undefined, amount: it.amount, participants })
         }
         payload.push({ payerIndex: payerPos, items })
       }
-      if (payload.length === 0) return setError('금액이 있는 자리를 1개 이상 넣어 주세요')
+      if (payload.length === 0) return fail('rounds', '금액이 있는 자리를 1개 이상 넣어 주세요')
     }
 
     const payer = Math.max(0, filledIdx.indexOf(effectivePayer)) // 1/N 낸 사람
     // 안 나눠떨어지면(단위 무관, 안 함의 1~2원 포함) 남는 금액 받을 사람을 골라야. filled 위치로 변환.
     let absorberIdx: number | undefined
     if (leftover > 0) {
-      if (absorberIndex === null) return setError('남은 금액 받을 사람을 골라주세요')
+      if (absorberIndex === null) return fail('absorber', '남은 금액 받을 사람을 골라주세요')
       const pos = filledIdx.indexOf(absorberIndex)
-      if (pos < 0) return setError('남은 금액 받을 사람을 다시 골라주세요')
+      if (pos < 0) return fail('absorber', '남은 금액 받을 사람을 다시 골라주세요')
       absorberIdx = pos
     }
 
     const resolved = resolveAccount(accounts, accountId, acct)
-    if (resolved.error) return setError(resolved.error)
+    if (resolved.error) return fail('account', resolved.error)
 
     startTransition(async () => {
       try {
@@ -406,26 +422,31 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   }
 
   const partChip = (active: boolean) =>
-    'rounded-full px-3 py-1.5 text-sm font-medium transition ' +
+    'rounded-full px-3 py-2 text-sm font-medium transition active:scale-95 ' +
     (active
       ? 'bg-brand text-white'
-      : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500')
+      : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
   // 단일 선택(차수 낸 사람)은 미선택도 안 흐리게(참여 토글과 구분).
   const payerChip = (active: boolean) =>
-    'rounded-full px-3 py-1.5 text-sm font-medium transition ' +
+    'rounded-full px-3 py-2 text-sm font-medium transition active:scale-95 ' +
     (active
       ? 'bg-brand text-white'
       : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
   const amountBtnCls =
-    'num shrink-0 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] font-semibold tabular-nums dark:border-neutral-700 dark:bg-neutral-950'
+    'num shrink-0 min-w-[88px] rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-center text-[15px] font-semibold tabular-nums dark:border-neutral-700 dark:bg-neutral-950'
 
   // 참여 칩 한 줄(메뉴/총액 공용)
   const amongRow = (r: number, ii: number, it: RoundItem) =>
     filledIdx.length >= 1 ? (
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        <span className="w-10 shrink-0 text-xs text-neutral-400">참여</span>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2" role="group" aria-label="참여 인원">
+        <span className="w-10 shrink-0 text-xs text-neutral-500 dark:text-neutral-400">참여</span>
         {filledIdx.map((fi) => (
-          <button key={fi} onClick={() => toggleItemAmong(r, ii, fi)} className={partChip(it.among[fi])}>
+          <button
+            key={fi}
+            onClick={() => toggleItemAmong(r, ii, fi)}
+            aria-pressed={it.among[fi]}
+            className={partChip(it.among[fi])}
+          >
             {members[fi].trim()}
           </button>
         ))}
@@ -456,7 +477,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
           <h1>
             <Wordmark />
           </h1>
-          <p className="mt-1.5 text-sm text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
+          <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
         </header>
       )}
 
@@ -475,29 +496,31 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="제목"
+          placeholder="예: 제주 여행"
+          aria-label="정산 제목"
           maxLength={50}
-          className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] font-medium outline-none focus:border-brand dark:border-neutral-700"
+          className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] font-medium outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
         />
       </section>
 
       {/* 맨 위 입력 — 1/N은 금액, 항목별은 차수 묶음 */}
       {mode === 'quick' ? (
         <button
+          ref={refFor('main')}
           onClick={() => setPadOpen(true)}
           className="mb-6 w-full rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-5 text-left dark:border-neutral-800 dark:bg-neutral-900"
         >
-          <span className="text-sm text-neutral-400">얼마 나왔어요?</span>
+          <span className="text-sm text-neutral-500 dark:text-neutral-400">얼마 나왔어요?</span>
           <div className="num mt-1 text-4xl font-bold tracking-tight">
             {amount > 0 ? (
               formatWon(amount)
             ) : (
-              <span className="text-neutral-300 dark:text-neutral-600">0원</span>
+              <span className="text-neutral-400 dark:text-neutral-500">0원</span>
             )}
           </div>
         </button>
       ) : (
-        <section className="mb-5">
+        <section ref={refFor('main')} className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">어디어디 갔어요?</p>
           <div className="flex flex-col gap-3">
             {rounds.map((rd, r) => (
@@ -511,7 +534,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                     <button
                       onClick={() => removeRound(r)}
                       aria-label="차수 삭제"
-                      className="px-1 text-neutral-300 hover:text-neutral-500"
+                      className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base leading-none text-neutral-400 transition active:scale-90 hover:bg-neutral-100 hover:text-neutral-500 dark:hover:bg-neutral-800"
                     >
                       ✕
                     </button>
@@ -520,10 +543,15 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
                 {/* 차수 낸 사람 */}
                 {filledIdx.length >= 1 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className="w-10 shrink-0 text-xs text-neutral-400">낸 사람</span>
+                  <div className="mt-2 flex flex-wrap items-center gap-2" role="group" aria-label="낸 사람">
+                    <span className="w-10 shrink-0 text-xs text-neutral-500 dark:text-neutral-400">낸 사람</span>
                     {filledIdx.map((fi) => (
-                      <button key={fi} onClick={() => setRoundPayer(r, fi)} className={payerChip(effRoundPayer(rd) === fi)}>
+                      <button
+                        key={fi}
+                        onClick={() => setRoundPayer(r, fi)}
+                        aria-pressed={effRoundPayer(rd) === fi}
+                        className={payerChip(effRoundPayer(rd) === fi)}
+                      >
                         {members[fi].trim()}
                       </button>
                     ))}
@@ -534,19 +562,19 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                   /* 간단: 총액 + 참여 + 메뉴별로 나누기 */
                   <>
                     <div className="mt-2.5 flex items-center justify-between gap-2">
-                      <span className="text-sm text-neutral-400">얼마 나왔어요?</span>
+                      <span className="text-sm text-neutral-500 dark:text-neutral-400">얼마 나왔어요?</span>
                       <button onClick={() => setPadTarget({ r, i: 0 })} className={amountBtnCls}>
                         {rd.items[0].amount > 0 ? (
                           formatWon(rd.items[0].amount)
                         ) : (
-                          <span className="text-neutral-300 dark:text-neutral-600">금액</span>
+                          <span className="text-neutral-400 dark:text-neutral-500">금액</span>
                         )}
                       </button>
                     </div>
                     {amongRow(r, 0, rd.items[0])}
                     <button
                       onClick={() => toggleRoundSplit(r)}
-                      className="mt-2.5 inline-flex items-center gap-1 text-sm font-medium text-neutral-500 hover:text-brand"
+                      className="-mx-1.5 mt-2 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"
                     >
                       <IcoPlus className="h-3.5 w-3.5" /> 메뉴별로 나누기
                     </button>
@@ -560,21 +588,22 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                           <input
                             value={it.name}
                             placeholder={`메뉴 ${ii + 1}`}
+                            aria-label={`메뉴 ${ii + 1} 이름`}
                             onChange={(e) => patchItem(r, ii, { name: e.target.value })}
-                            className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] outline-none focus:border-brand dark:border-neutral-700 dark:bg-neutral-950"
+                            className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700 dark:bg-neutral-950"
                           />
                           <button onClick={() => setPadTarget({ r, i: ii })} className={amountBtnCls}>
                             {it.amount > 0 ? (
                               formatWon(it.amount)
                             ) : (
-                              <span className="text-neutral-300 dark:text-neutral-600">금액</span>
+                              <span className="text-neutral-400 dark:text-neutral-500">금액</span>
                             )}
                           </button>
                           {rd.items.length > 1 && (
                             <button
                               onClick={() => removeItemFromRound(r, ii)}
                               aria-label="메뉴 삭제"
-                              className="shrink-0 px-1 text-neutral-300 hover:text-neutral-500"
+                              className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base leading-none text-neutral-400 transition active:scale-90 hover:bg-neutral-100 hover:text-neutral-500 dark:hover:bg-neutral-800"
                             >
                               ✕
                             </button>
@@ -583,16 +612,16 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                         {amongRow(r, ii, it)}
                       </div>
                     ))}
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                       <button
                         onClick={() => addItemToRound(r)}
-                        className="inline-flex items-center gap-1 text-sm font-medium text-neutral-500 hover:text-brand"
+                        className="-mx-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"
                       >
                         <IcoPlus className="h-3.5 w-3.5" /> 메뉴 추가
                       </button>
                       <button
                         onClick={() => toggleRoundSplit(r)}
-                        className="text-sm text-neutral-400 underline-offset-2 hover:underline"
+                        className="-mx-1.5 rounded-lg px-1.5 py-2 text-sm text-neutral-500 underline-offset-2 transition hover:underline dark:text-neutral-400"
                       >
                         간단히
                       </button>
@@ -604,15 +633,19 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
           </div>
           <button
             onClick={addRound}
-            className="mt-3 flex w-full items-center justify-center gap-1 rounded-2xl border border-dashed border-neutral-300 py-3 text-sm font-medium text-neutral-500 hover:border-brand hover:text-brand dark:border-neutral-700"
+            className="mt-3 flex w-full items-center justify-center gap-1 rounded-2xl border border-dashed border-neutral-300 py-3 text-sm font-medium text-neutral-500 transition hover:border-brand hover:text-brand-700 dark:border-neutral-700 dark:hover:text-brand"
           >
             <IcoPlus className="h-4 w-4" /> {rounds.length + 1}차 추가
           </button>
         </section>
       )}
 
+      {(errorField === 'amount' || errorField === 'rounds') && error && (
+        <p className="-mt-2 mb-4 text-sm text-red-500">{error}</p>
+      )}
+
       {/* 참여자 (공유) */}
-      <section className="mb-5">
+      <section ref={refFor('members')} className="mb-5">
         <p className="mb-2 text-sm font-medium text-neutral-500">누구랑 나눠요?</p>
         <div className="flex flex-col gap-2">
           {members.map((m, i) => (
@@ -623,16 +656,17 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                 }}
                 value={m}
                 placeholder={i === 0 ? '나' : `친구 ${i}`}
+                aria-label={i === 0 ? '내 이름' : `친구 ${i} 이름`}
                 onChange={(e) => setMember(i, e.target.value)}
                 onKeyDown={(e) => onMemberKeyDown(e, i)}
                 enterKeyHint="next"
-                className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] outline-none focus:border-brand dark:border-neutral-700"
+                className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
               />
               {members.length > 2 && (
                 <button
                   onClick={() => removeMember(i)}
-                  aria-label="삭제"
-                  className="shrink-0 px-2 text-neutral-300 hover:text-neutral-500"
+                  aria-label={`${i === 0 ? '나' : `친구 ${i}`} 삭제`}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base leading-none text-neutral-400 transition active:scale-90 hover:bg-neutral-100 hover:text-neutral-500 dark:hover:bg-neutral-800"
                 >
                   ✕
                 </button>
@@ -642,7 +676,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         </div>
         <button
           onClick={addMember}
-          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-neutral-500 hover:text-brand"
+          className="-mx-1.5 mt-1 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"
         >
           <IcoPlus className="h-4 w-4" /> 사람 추가
         </button>
@@ -650,13 +684,13 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         {/* 최근 참여자 빠른 추가 — 과거 정산에서 쓴 이름을 탭으로(매번 타이핑 안 하게). */}
         {memberSuggestions.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1.5 text-xs text-neutral-400">최근 같이 정산한 사람</p>
+            <p className="mb-1.5 text-xs text-neutral-500 dark:text-neutral-400">최근 같이 정산한 사람</p>
             <div className="flex flex-wrap gap-2">
               {memberSuggestions.map((n) => (
                 <button
                   key={n}
                   onClick={() => addNamedMember(n)}
-                  className="inline-flex items-center gap-1 rounded-full border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 transition hover:border-brand hover:text-brand dark:border-neutral-700 dark:text-neutral-300"
+                  className="inline-flex items-center gap-1 rounded-full border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition active:scale-95 hover:border-brand hover:text-brand-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand"
                 >
                   <IcoPlus className="h-3.5 w-3.5" /> {n}
                 </button>
@@ -664,19 +698,21 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
             </div>
           </div>
         )}
+        {errorField === 'members' && error && <p className="mt-2 text-sm text-red-500">{error}</p>}
       </section>
 
       {/* 낸 사람 — 1/N만(항목별은 차수마다 '낸 사람'을 따로 고름). */}
       {mode === 'quick' && filledIdx.length >= 1 && (
         <section className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">누가 냈어요?</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="낸 사람">
             {filledIdx.map((i) => (
               <button
                 key={i}
                 onClick={() => setPayerIndex(i)}
+                aria-pressed={effectivePayer === i}
                 className={
-                  'rounded-full px-4 py-2 text-sm font-medium transition ' +
+                  'rounded-full px-4 py-2.5 text-sm font-medium transition active:scale-95 ' +
                   (effectivePayer === i
                     ? 'bg-brand text-white'
                     : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
@@ -715,7 +751,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       {showUnit && (
         <section className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">
-            금액 단위로 맞추기 <span className="font-normal text-neutral-400">(선택)</span>
+            금액 단위로 맞추기 <span className="font-normal text-neutral-500 dark:text-neutral-400">(선택)</span>
           </p>
           <div className="flex gap-2">
             {[1, 10, 100, 1000].map((u) => (
@@ -725,6 +761,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                   setUnit(u)
                   setAbsorberIndex(null)
                   setError(null)
+                  setErrorField(null)
                 }}
                 className={
                   'flex-1 rounded-xl py-2.5 text-sm font-medium transition ' +
@@ -740,25 +777,30 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
           {/* 안 떨어지면(안 함의 1~2원 포함) 남는 금액 받을 사람을 직접 고른다(자동 기본값 없음). */}
           {leftover > 0 && (
-            <div className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
+            <div
+              ref={refFor('absorber')}
+              className="mt-3 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900"
+            >
               <p className="text-sm text-neutral-600 dark:text-neutral-300">
                 {mode === 'quick' && (
                   <>
-                    각자 <span className="num font-semibold text-brand">{formatWon(quickBase)}</span> ·{' '}
+                    각자 <span className="num font-semibold text-brand-700 dark:text-brand">{formatWon(quickBase)}</span> ·{' '}
                   </>
                 )}
                 남은 <span className="num font-semibold">{formatWon(leftover)}</span> 누가 낼까요?
               </p>
-              <div className="mt-2.5 flex flex-wrap gap-2">
+              <div className="mt-2.5 flex flex-wrap gap-2" role="group" aria-label="남은 금액 받을 사람">
                 {filledIdx.map((fi) => (
                   <button
                     key={fi}
                     onClick={() => {
                       setAbsorberIndex(fi)
                       setError(null)
+                      setErrorField(null)
                     }}
+                    aria-pressed={absorberIndex === fi}
                     className={
-                      'rounded-full px-4 py-2 text-sm font-medium transition ' +
+                      'rounded-full px-4 py-2.5 text-sm font-medium transition active:scale-95 ' +
                       (absorberIndex === fi
                         ? 'bg-brand text-white'
                         : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
@@ -768,6 +810,9 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                   </button>
                 ))}
               </div>
+              {errorField === 'absorber' && error && (
+                <p className="mt-2.5 text-sm text-red-500">{error}</p>
+              )}
             </div>
           )}
         </section>
@@ -775,9 +820,9 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
       {/* 받을 계좌 (공유). 저장계좌 있으면 칩, 없으면 인라인 입력(선택). */}
       {accounts !== null && (
-        <section className="mb-5">
+        <section ref={refFor('account')} className="mb-5">
           <p className="mb-2 text-sm font-medium text-neutral-500">
-            어디로 받을까요? <span className="font-normal text-neutral-400">(선택)</span>
+            어디로 받을까요? <span className="font-normal text-neutral-500 dark:text-neutral-400">(선택)</span>
           </p>
           <AccountField
             accounts={accounts}
@@ -787,10 +832,11 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
             onInline={setAcct}
           />
           {accounts.length === 0 && (
-            <p className="mt-1.5 text-xs text-neutral-400">
+            <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
               입력하면 정산에 표시되고, 다음부턴 자동으로 채워져요. 비워두면 계좌 없이 정산돼요.
             </p>
           )}
+          {errorField === 'account' && error && <p className="mt-1.5 text-sm text-red-500">{error}</p>}
         </section>
       )}
 
@@ -822,14 +868,14 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
             </section>
           )}
 
-      {error && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
+      {error && !errorField && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
 
       <button
         onClick={submit}
         disabled={pending}
         className="mb-4 mt-auto w-full rounded-2xl bg-brand py-4 text-base font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
       >
-        {pending ? (isEdit ? '수정 중…' : '정산 중…') : isEdit ? '수정 완료' : '정산하기'}
+        {pending ? (isEdit ? '저장 중…' : '만드는 중…') : isEdit ? '수정 완료' : '정산하기'}
       </button>
 
       {/* 1/N 금액 숫자패드 */}

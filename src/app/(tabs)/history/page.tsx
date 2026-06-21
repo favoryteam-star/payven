@@ -19,7 +19,7 @@ export default async function HistoryPage() {
           </div>
           <div>
             <p className="text-[15px] font-medium">로그인하면 정산 내역을 볼 수 있어요</p>
-            <p className="mt-1 text-sm text-neutral-400">만든 정산이 자동으로 여기에 모여요</p>
+            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">만든 정산이 자동으로 여기에 모여요</p>
           </div>
           <a
             href="/auth/login?provider=kakao&next=/history"
@@ -42,7 +42,7 @@ export default async function HistoryPage() {
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 bg-neutral-50 px-6 py-16 text-center dark:border-neutral-800 dark:bg-neutral-900">
           <IcoList className="h-9 w-9 text-neutral-300" />
           <p className="text-[15px] font-medium">아직 만든 정산이 없어요</p>
-          <p className="text-sm text-neutral-400">정산을 만들면 여기에 모여요.</p>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">정산을 만들면 여기에 모여요</p>
         </div>
       ) : (
         <ul className="flex flex-col gap-2">

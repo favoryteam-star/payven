@@ -21,13 +21,13 @@ function AccountCard({ account }: { account: Account }) {
     <div className="rounded-2xl border border-brand/20 bg-brand/5 px-4 py-3.5 dark:border-brand/25 dark:bg-brand/10">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-brand">받는 계좌</p>
+          <p className="text-xs font-medium text-brand-700 dark:text-brand">받는 계좌</p>
           <p className="num mt-1 text-[15px] font-semibold tracking-tight">
             <span className="text-neutral-500">{account.bankName}</span>{' '}
             {formatAccountNo(account.bankName, account.accountNo)}
           </p>
           {account.holder && (
-            <p className="mt-0.5 text-xs text-neutral-400">예금주 {account.holder}</p>
+            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">예금주 {account.holder}</p>
           )}
         </div>
         <CopyButton value={account.accountNo} label="계좌 복사" />
@@ -114,7 +114,7 @@ export function SettleBoard({
         <IcoCheck className="h-8 w-8" />
       </span>
       <div>
-        <p className="text-lg font-bold tracking-tight">딱 맞췄어요</p>
+        <h2 className="text-lg font-bold tracking-tight">딱 맞췄어요</h2>
         <p className="mt-1 text-sm text-neutral-500">더 보낼 것도, 받을 것도 없어요.</p>
       </div>
     </div>
@@ -146,12 +146,12 @@ export function SettleBoard({
                       <span className="mx-1.5 text-neutral-300">→</span>
                       <span className="font-semibold">{nameOf(t.to)}</span>
                     </div>
-                    <div className="num mt-0.5 text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                    <div className="num mt-0.5 text-lg font-bold text-emerald-700 dark:text-emerald-400">
                       {formatWon(t.amount)}
                     </div>
                   </div>
                   {canAct && (
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="flex shrink-0 items-center gap-2">
                       {toAcct && (
                         <TossButton
                           bankName={toAcct.bankName}
@@ -163,9 +163,9 @@ export function SettleBoard({
                         type="button"
                         disabled={busy}
                         onClick={() => markSent(t)}
-                        className="shrink-0 rounded-lg border border-brand/30 px-3 py-1.5 text-xs font-medium text-brand transition hover:bg-brand/5 disabled:opacity-50"
+                        className="shrink-0 rounded-lg border border-brand/30 px-3.5 py-2.5 text-[13px] font-medium text-brand-700 transition active:scale-[0.98] hover:bg-brand/5 disabled:opacity-50 dark:text-brand"
                       >
-                        보냈어요
+                        {busy ? '…' : '보냈어요'}
                       </button>
                     </div>
                   )}
@@ -178,7 +178,7 @@ export function SettleBoard({
 
       {done.length > 0 && (
         <div className="mt-5">
-          <h2 className="mb-3 text-sm font-medium text-neutral-500">보낸 송금 ✓</h2>
+          <h2 className="mb-3 text-sm font-medium text-neutral-500">보냈어요 ✓</h2>
           <ul className="flex flex-col gap-2">
             {done.map((d) => (
               <li
@@ -196,9 +196,9 @@ export function SettleBoard({
                     type="button"
                     disabled={busy}
                     onClick={() => undo(d)}
-                    className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-neutral-400 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300"
+                    className="shrink-0 rounded-lg border border-neutral-200 px-3.5 py-2.5 text-[13px] font-medium text-neutral-500 transition active:scale-[0.98] hover:border-neutral-400 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300"
                   >
-                    취소
+                    {busy ? '…' : '취소'}
                   </button>
                 )}
               </li>
@@ -214,7 +214,7 @@ export function SettleBoard({
   if (canManageAll) {
     return (
       <div>
-        <p className="mb-3 text-xs text-neutral-400">정산 관리 · 받은 송금을 표시하거나 되돌릴 수 있어요</p>
+        <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">정산 관리 · 받은 송금을 표시하거나 취소할 수 있어요</p>
         {allSettled && checkCard}
         {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
         {fullBoard(true)}
@@ -226,19 +226,19 @@ export function SettleBoard({
   const identityPrompt = (
     <div className="mb-5 rounded-2xl border border-neutral-100 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <p className="mb-3 text-sm font-semibold">이 정산에서 당신은 누구예요?</p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="나를 선택">
         {members.map((m) => (
           <button
             key={m.id}
             type="button"
             onClick={() => pick(m.id)}
-            className="rounded-full border border-neutral-200 px-4 py-2 text-sm font-medium transition hover:border-brand hover:text-brand dark:border-neutral-700"
+            className="rounded-full border border-neutral-200 px-4 py-2.5 text-sm font-medium transition active:scale-95 hover:border-brand hover:text-brand dark:border-neutral-700"
           >
             {m.name}
           </button>
         ))}
       </div>
-      <p className="mt-2.5 text-xs text-neutral-400">고르면 내가 보낼(받을) 것만 콕 집어 보여줘요</p>
+      <p className="mt-2.5 text-xs text-neutral-500 dark:text-neutral-400">고르면 내가 보낼(받을) 것만 콕 집어 보여줘요</p>
     </div>
   )
 
@@ -287,7 +287,7 @@ export function SettleBoard({
             key={`po${i}`}
             className="rounded-3xl border border-brand/25 bg-brand/5 p-5 dark:border-brand/30 dark:bg-brand/10"
           >
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand">내 차례</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand">내 차례</p>
             <p className="mt-2 text-[17px]">
               <span className="font-bold">{nameOf(t.to)}</span>님에게
             </p>
@@ -301,7 +301,7 @@ export function SettleBoard({
                   {formatAccountNo(toAcct.bankName, toAcct.accountNo)}
                 </p>
                 {toAcct.holder && (
-                  <p className="mt-0.5 text-xs text-neutral-400">예금주 {toAcct.holder}</p>
+                  <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">예금주 {toAcct.holder}</p>
                 )}
               </div>
             )}
@@ -337,23 +337,23 @@ export function SettleBoard({
             </p>
             <p className="num mt-0.5 text-lg font-bold">
               {formatWon(d.amount)}{' '}
-              <span className="text-sm font-semibold text-brand">✓ 보냈어요</span>
+              <span className="text-sm font-semibold text-brand-700 dark:text-brand">✓ 보냈어요</span>
             </p>
           </div>
           <button
             type="button"
             disabled={busy}
             onClick={() => undo(d)}
-            className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-500 transition hover:border-neutral-400 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300"
+            className="shrink-0 rounded-lg border border-neutral-200 px-3.5 py-2.5 text-[13px] font-medium text-neutral-500 transition active:scale-[0.98] hover:border-neutral-400 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-300"
           >
-            취소
+            {busy ? '…' : '취소'}
           </button>
         </div>
       ))}
     </div>
   ) : hasIn ? (
     <div className="mb-4 rounded-3xl border border-brand/25 bg-brand/5 p-5 dark:border-brand/30 dark:bg-brand/10">
-      <p className="text-xs font-semibold uppercase tracking-wide text-brand">받을 차례</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand">받을 차례</p>
       <p className="num mt-2 text-4xl font-extrabold tracking-tight">{formatWon(inSum)}</p>
       <p className="mt-0.5 text-sm text-neutral-500">
         받을 금액{receivedSum > 0 ? ` · ${formatWon(receivedSum)} 받음` : ''}

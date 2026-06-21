@@ -24,7 +24,7 @@ export function TossButton({
     <button
       type="button"
       onClick={onClick}
-      className="shrink-0 rounded-lg bg-[#0064FF] px-3 py-1.5 text-xs font-semibold text-white transition active:scale-[0.98]"
+      className="shrink-0 rounded-lg bg-[#0064FF] px-3.5 py-2.5 text-[13px] font-semibold text-white transition active:scale-[0.98]"
     >
       토스 송금
     </button>

@@ -48,7 +48,7 @@ export default async function MyPage() {
         </div>
         <div>
           <p className="text-[15px] font-medium">로그인하면 정산을 저장할 수 있어요</p>
-          <p className="mt-1 text-sm text-neutral-400">카카오로 1초 만에 시작</p>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">카카오로 1초 만에 시작</p>
         </div>
         <a
           href="/auth/login?provider=kakao&next=/my"
