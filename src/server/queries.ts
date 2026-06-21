@@ -345,6 +345,46 @@ export async function listGroupsByOwner(ownerId: string): Promise<SettlementSumm
   }))
 }
 
+/**
+ * 로그인 사용자가 과거 정산에서 쓴 참여자 이름(최근순, 중복·'나'·빈 이름 제외). 참여자 빠른 추가용.
+ * 내 그룹(owner_id) 최신순으로 멤버를 모아 dedupe. N+1 없이 2쿼리.
+ */
+export async function listRecentMemberNames(ownerId: string): Promise<string[]> {
+  const supa = getAdminClient()
+  const { data: groups, error: gErr } = await supa
+    .from('groups')
+    .select('id')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: false })
+    .limit(40)
+  if (gErr) throw new Error(gErr.message)
+  const ids = (groups ?? []).map((g) => g.id)
+  if (ids.length === 0) return []
+
+  const { data: members, error: mErr } = await supa
+    .from('members')
+    .select('name, group_id')
+    .in('group_id', ids)
+  if (mErr) throw new Error(mErr.message)
+
+  // 그룹 최신순 랭크로 정렬 후 dedupe('나'·빈 이름 제외).
+  const rank = new Map(ids.map((id, i) => [id, i]))
+  const sorted = (members ?? [])
+    .map((m) => ({ name: m.name.trim(), r: rank.get(m.group_id) ?? Infinity }))
+    .filter((m) => m.name && m.name !== '나')
+    .sort((a, b) => a.r - b.r)
+
+  const seen = new Set<string>()
+  const names: string[] = []
+  for (const m of sorted) {
+    if (seen.has(m.name)) continue
+    seen.add(m.name)
+    names.push(m.name)
+    if (names.length >= 12) break
+  }
+  return names
+}
+
 // ── 저장 계좌(받는 사람 계좌) ──────────────────────────────────────
 // 전부 user_id로 스코프 → 한 사용자가 남의 계좌를 건드릴 수 없음(service_role여도 방어).
 // '유저당 기본 1개' 부분 유니크 인덱스(0006) 충돌을 피하려고 기본 전환은 항상 '먼저 끄고 켜기' 순서.

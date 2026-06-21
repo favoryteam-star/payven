@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from '
 import { useRouter } from 'next/navigation'
 import { formatWon } from '@/domain/money'
 import { equalSplit } from '@/domain/settle'
-import { addItemizedBillAction, quickSettleAction } from '@/app/actions'
+import { addItemizedBillAction, getRecentMembersAction, quickSettleAction } from '@/app/actions'
 import { Numpad } from '@/components/Numpad'
 import { IcoPlus } from '@/components/icons'
 import { Wordmark } from '@/components/Logo'
@@ -47,6 +47,18 @@ export default function Home() {
   // 멤버 입력에서 엔터 → 다음 칸으로(마지막이면 자동 추가). focusMember가 set되면 해당 칸에 포커스.
   const memberRefs = useRef<(HTMLInputElement | null)[]>([])
   const [focusMember, setFocusMember] = useState<number | null>(null)
+
+  // 과거 정산에서 쓴 참여자 이름(최근순) — 빠른 추가 칩. 미로그인이면 빈 배열.
+  const [recentNames, setRecentNames] = useState<string[]>([])
+  useEffect(() => {
+    let alive = true
+    getRecentMembersAction()
+      .then((r) => alive && setRecentNames(r))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
 
   // 받을 계좌. null=로딩. 저장계좌 있으면 칩(accountId), 없으면 인라인 입력(acct). undefined=미선택(기본 자동).
   const accounts = useMyAccounts()
@@ -113,6 +125,9 @@ export default function Home() {
   const filledIdx = members.map((n, i) => (n.trim() ? i : -1)).filter((i) => i >= 0)
   // 결제자가 비워졌거나 범위를 벗어나면 첫 채워진 멤버로 — 표시·계산·제출의 단일 출처.
   const effectivePayer = filledIdx.includes(payerIndex) ? payerIndex : (filledIdx[0] ?? 0)
+  // 최근 참여자 빠른 추가: 이미 들어간 이름은 제외.
+  const currentNames = new Set(members.map((m) => m.trim()).filter(Boolean))
+  const memberSuggestions = recentNames.filter((n) => !currentNames.has(n)).slice(0, 8)
 
   // 1/N: 균등이라 base는 전원 동일. 단위로 안 떨어지면 남는 금액은 고른 사람이 흡수(안 함의 1~2원 포함).
   const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
@@ -148,6 +163,16 @@ export default function Home() {
   const addMember = () => {
     setMembers((p) => [...p, ''])
     setItems((p) => p.map((it) => ({ ...it, among: [...it.among, true] })))
+  }
+  // 최근 칩 탭 → 빈 칸 있으면 채우고, 없으면 새로 추가(항목별 among도 갱신).
+  const addNamedMember = (name: string) => {
+    const empty = members.findIndex((m) => !m.trim())
+    if (empty >= 0) {
+      setMembers((p) => p.map((m, i) => (i === empty ? name : m)))
+    } else {
+      setMembers((p) => [...p, name])
+      setItems((p) => p.map((it) => ({ ...it, among: [...it.among, true] })))
+    }
   }
   const removeMember = (i: number) => {
     if (members.length <= 2) return
@@ -382,6 +407,24 @@ export default function Home() {
         >
           <IcoPlus className="h-4 w-4" /> 사람 추가
         </button>
+
+        {/* 최근 참여자 빠른 추가 — 과거 정산에서 쓴 이름을 탭으로(매번 타이핑 안 하게). */}
+        {memberSuggestions.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-xs text-neutral-400">최근 같이 정산한 사람</p>
+            <div className="flex flex-wrap gap-2">
+              {memberSuggestions.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => addNamedMember(n)}
+                  className="inline-flex items-center gap-1 rounded-full border border-neutral-200 px-3 py-1.5 text-sm text-neutral-600 transition hover:border-brand hover:text-brand dark:border-neutral-700 dark:text-neutral-300"
+                >
+                  <IcoPlus className="h-3.5 w-3.5" /> {n}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 낸 사람 (공유) */}

@@ -17,6 +17,7 @@ import {
   createQuickSettle,
   createUserAccount,
   deleteUserAccount,
+  listRecentMemberNames,
   listUserAccounts,
   recordSettlement,
   setDefaultUserAccount,
@@ -75,6 +76,13 @@ export async function getMyAccountsAction(): Promise<SavedAccount[]> {
   const user = await getAuthUser()
   if (!user) return []
   return listUserAccounts(user.id)
+}
+
+/** 만들기 폼의 '최근 참여자' 빠른 추가용 이름 목록(읽기). 미로그인이면 빈 배열. */
+export async function getRecentMembersAction(): Promise<string[]> {
+  const user = await getAuthUser()
+  if (!user) return []
+  return listRecentMemberNames(user.id)
 }
 
 export const saveAccountAction = withRateLimit(async (raw: unknown): Promise<AccountResult> => {
