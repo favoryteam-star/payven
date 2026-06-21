@@ -316,13 +316,16 @@ export default function Home() {
       <ModeChips value={mode} onChange={switchMode} className="mb-4" />
 
       {/* 제목 (공유) — 기본=모드명, 수정 가능. 기본값 그대로면 정산결과에서 제목 숨김. */}
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="제목"
-        maxLength={50}
-        className="mb-4 w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] font-medium outline-none focus:border-brand dark:border-neutral-700"
-      />
+      <section className="mb-5">
+        <p className="mb-2 text-sm font-medium text-neutral-500">뭐라고 부를까요?</p>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="제목"
+          maxLength={50}
+          className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] font-medium outline-none focus:border-brand dark:border-neutral-700"
+        />
+      </section>
 
       {/* 맨 위 입력 — 1/N은 금액, 항목별은 항목(나머지 섹션은 공유) */}
       {mode === 'quick' ? (
