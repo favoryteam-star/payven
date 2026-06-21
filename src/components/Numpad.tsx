@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { formatWon } from '@/domain/money'
 
 const MAX = 1_000_000_000
@@ -15,11 +16,33 @@ export function Numpad({
   onChange: (next: number) => void
   onClose: () => void
 }) {
-  if (!open) return null
-
   const press = (d: number) => onChange(Math.min(MAX, amount * 10 + d))
   const back = () => onChange(Math.floor(amount / 10))
   const add = (n: number) => onChange(Math.min(MAX, amount + n))
+
+  // 물리 키보드도 받는다(데스크톱·외장키보드): 숫자=입력, Backspace=지움, Enter/Esc=닫기.
+  // 다른 입력칸(멤버 이름 등)에 포커스가 있으면 가로채지 않음. 훅은 early-return 앞.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault()
+        onChange(Math.min(MAX, amount * 10 + Number(e.key)))
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        onChange(Math.floor(amount / 10))
+      } else if (e.key === 'Enter' || e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, amount, onChange, onClose])
+
+  if (!open) return null
 
   const keys = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
