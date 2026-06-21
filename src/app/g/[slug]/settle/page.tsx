@@ -10,6 +10,7 @@ import { getAuthUser } from '@/server/auth'
 import { ShareButton } from '@/components/ShareButton'
 import { IcoBack } from '@/components/icons'
 import { SettleBoard } from './_components/SettleBoard'
+import { SettleDetails } from './_components/SettleDetails'
 
 const loadGroup = cache(getGroupBySlug)
 
@@ -70,6 +71,17 @@ export default async function SettlePage({ params }: Params) {
       }
     : null
 
+  // 상세보기(항목별만): 차수→메뉴→참여자 이름을 displayName(예금주 실명 우선)으로 해석한 plain props.
+  const detailRounds = snap.rounds.map((r) => ({
+    payerName: displayName(r.payer),
+    items: r.items.map((it) => ({
+      name: it.description,
+      amount: it.amount,
+      participants: it.participants.map((id) => displayName(id)),
+    })),
+  }))
+  const showDetails = snap.isItemized && detailRounds.length > 0
+
   return (
     <main className="flex min-h-dvh flex-col px-5 pb-8 pt-5">
       <Link
@@ -115,6 +127,8 @@ export default async function SettlePage({ params }: Params) {
         accountMemberId={accountMember?.id ?? null}
         canManageAll={canManageAll}
       />
+
+      {showDetails && <SettleDetails rounds={detailRounds} memberCount={memberIds.length} />}
 
       <div className="mt-auto pt-8">
         <ShareButton title={`${snap.group.name} 정산`} />

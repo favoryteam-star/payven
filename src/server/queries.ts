@@ -39,6 +39,17 @@ export interface SettledTransfer {
   amount: number
 }
 
+/** 표시 전용 — 공유 페이지 '상세히 보기'(차수·메뉴·참여자). 도메인 ExpenseRecord와 분리. */
+export interface SnapshotRoundItem {
+  description: string // 메뉴명. RPC가 빈값을 '항목'으로 저장 → 표시 시 placeholder 폴백.
+  amount: number
+  participants: string[] // 참여한 멤버 id(분담 행이 있는 멤버만)
+}
+export interface SnapshotRound {
+  payer: string // 낸 사람 멤버 id
+  items: SnapshotRoundItem[]
+}
+
 export interface GroupSnapshot {
   group: {
     id: string
@@ -53,6 +64,8 @@ export interface GroupSnapshot {
   expenses: ExpenseRecord[]
   settlements: SettlementRecord[] // 도메인 입력(netBalances) — id 없음(도메인 불변)
   settledTransfers: SettledTransfer[] // 화면 표시·취소용 — id 있음
+  isItemized: boolean // 항목별(weighted)이면 상세보기 노출. 빠른정산은 false.
+  rounds: SnapshotRound[] // 표시 전용 차수→메뉴→참여자(항목별만 채움)
 }
 
 /** 정산 날짜(event_date)를 RPC가 만든 그룹에 베스트에포트 부착. 실패해도 정산은 유지(표시는 created_at 폴백). */
@@ -260,7 +273,11 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
       .select('id, name, bank_name, account_no, account_holder')
       .eq('group_id', group.id)
       .order('created_at'),
-    supa.from('expenses').select('id, amount, paid_by').eq('group_id', group.id),
+    supa
+      .from('expenses')
+      .select('id, amount, paid_by, description, bill_id, split_type, created_at')
+      .eq('group_id', group.id)
+      .order('created_at'),
     supa.from('settlements').select('id, from_member, to_member, amount').eq('group_id', group.id),
   ])
 
@@ -283,6 +300,29 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
     paidBy: e.paid_by,
     shares: sharesByExpense.get(e.id) ?? [],
   }))
+
+  // 상세보기(표시 전용): 항목별이면 (bill_id, paid_by)로 차수 묶음 — getEditableGroup과 동일 그룹핑·순서.
+  const isItemized = expenses.some((e) => e.split_type === 'weighted')
+  const snapshotRounds: SnapshotRound[] = []
+  if (isItemized) {
+    const byKey = new Map<string, SnapshotRound>()
+    const order: string[] = []
+    for (const e of expenses) {
+      const key = `${e.bill_id ?? ''}|${e.paid_by}`
+      let round = byKey.get(key)
+      if (!round) {
+        round = { payer: e.paid_by, items: [] }
+        byKey.set(key, round)
+        order.push(key)
+      }
+      round.items.push({
+        description: e.description === '항목' ? '' : (e.description ?? ''),
+        amount: e.amount,
+        participants: (sharesByExpense.get(e.id) ?? []).map((s) => s.memberId),
+      })
+    }
+    for (const k of order) snapshotRounds.push(byKey.get(k)!)
+  }
 
   const settledRows = settlementsRes.data ?? []
   const settlementRecords: SettlementRecord[] = settledRows.map((s) => ({
@@ -317,6 +357,8 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
     expenses: expenseRecords,
     settlements: settlementRecords,
     settledTransfers,
+    isItemized,
+    rounds: snapshotRounds,
   }
 }
 
