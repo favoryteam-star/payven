@@ -265,7 +265,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const addRound = () =>
     setRounds((p) => {
       const payer = p.length ? p[p.length - 1].payer : 0 // 직전 차수 낸 사람 상속
-      return [...p, { payer, split: false, items: [{ name: '', amount: 0, among: allAmong() }] }]
+      // split: true = 메뉴 입력칸을 펼친 채 시작('간단히'로 총액 한 줄로 접을 수 있음)
+      return [...p, { payer, split: true, items: [{ name: '', amount: 0, among: allAmong() }] }]
     })
   const removeRound = (r: number) => {
     setRounds((p) => p.filter((_, i) => i !== r))
@@ -320,11 +321,11 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       }),
     )
 
-  // 모드 전환. 제목 따라가기 + 항목별 첫 진입이면 차수 1개 자동 생성(바로 입력하게).
+  // 모드 전환. 제목 따라가기 + 항목별 첫 진입이면 차수 1개 자동 생성(메뉴 펼친 채 바로 입력하게).
   const switchMode = (m: SettleMode) => {
     setTitle((t) => (t.trim() === '' || t === TITLES.quick || t === TITLES.items ? TITLES[m] : t))
     if (m === 'items')
-      setRounds((p) => (p.length ? p : [{ payer: 0, split: false, items: [{ name: '', amount: 0, among: allAmong() }] }]))
+      setRounds((p) => (p.length ? p : [{ payer: 0, split: true, items: [{ name: '', amount: 0, among: allAmong() }] }]))
     setMode(m)
   }
 
