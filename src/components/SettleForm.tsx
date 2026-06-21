@@ -198,6 +198,13 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const currentNames = new Set(members.map((m) => m.trim()).filter(Boolean))
   const memberSuggestions = recentNames.filter((n) => !currentNames.has(n)).slice(0, 8)
 
+  // 남는 금액 흡수자 기본값 = 낸 사람(헛탭 방지). 미선택이면 이 사람이 흡수하되, 칩에 표시되고 바꿀 수 있다.
+  const firstPaidRound = rounds.find((rd) => rd.items.some((it) => it.amount > 0))
+  const defaultAbsorber =
+    mode === 'quick' ? effectivePayer : firstPaidRound ? effRoundPayer(firstPaidRound) : (filledIdx[0] ?? 0)
+  const effectiveAbsorber =
+    absorberIndex !== null && filledIdx.includes(absorberIndex) ? absorberIndex : defaultAbsorber
+
   // 1/N: 균등이라 base는 전원 동일. 단위로 안 떨어지면 남는 금액은 고른 사람이 흡수(안 함의 1~2원 포함).
   const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
   const quickBase = perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
@@ -215,7 +222,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     const shares = equalSplit(it.amount, parts.map(String), {
       paidBy: String(payer),
       unit,
-      absorber: absorberIndex !== null ? String(absorberIndex) : undefined,
+      absorber: String(effectiveAbsorber),
     })
     const byId = new Map(shares.map((s) => [s.memberId, s.amount]))
     for (const oi of parts) tabs[filledIdx.indexOf(oi)] += byId.get(String(oi)) ?? 0
@@ -376,12 +383,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     const payer = Math.max(0, filledIdx.indexOf(effectivePayer)) // 1/N 낸 사람
     // 안 나눠떨어지면(단위 무관, 안 함의 1~2원 포함) 남는 금액 받을 사람을 골라야. filled 위치로 변환.
     let absorberIdx: number | undefined
-    if (leftover > 0) {
-      if (absorberIndex === null) return fail('absorber', '남은 금액 받을 사람을 골라주세요')
-      const pos = filledIdx.indexOf(absorberIndex)
-      if (pos < 0) return fail('absorber', '남은 금액 받을 사람을 다시 골라주세요')
-      absorberIdx = pos
-    }
+    // 흡수자 = 명시 선택 없으면 낸 사람(effectiveAbsorber)이 기본 — 강제 탭 없음. 항상 유효한 채워진 멤버.
+    if (leftover > 0) absorberIdx = Math.max(0, filledIdx.indexOf(effectiveAbsorber))
 
     const resolved = resolveAccount(accounts, accountId, acct)
     if (resolved.error) return fail('account', resolved.error)
@@ -798,10 +801,10 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                       setError(null)
                       setErrorField(null)
                     }}
-                    aria-pressed={absorberIndex === fi}
+                    aria-pressed={effectiveAbsorber === fi}
                     className={
                       'rounded-full px-4 py-2.5 text-sm font-medium transition active:scale-95 ' +
-                      (absorberIndex === fi
+                      (effectiveAbsorber === fi
                         ? 'bg-brand text-white'
                         : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
                     }
@@ -810,9 +813,6 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                   </button>
                 ))}
               </div>
-              {errorField === 'absorber' && error && (
-                <p className="mt-2.5 text-sm text-red-500">{error}</p>
-              )}
             </div>
           )}
         </section>
@@ -870,13 +870,21 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
       {error && !errorField && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
 
-      <button
-        onClick={submit}
-        disabled={pending}
-        className="mb-4 mt-auto w-full rounded-2xl bg-brand py-4 text-base font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+      {/* 1차 액션 — 입력하다 매번 끝까지 스크롤 안 하게 하단 sticky(홈은 탭바 위, 수정은 맨 아래). */}
+      <div
+        className={
+          'sticky z-30 -mx-5 mt-auto bg-gradient-to-t from-white via-white to-transparent px-5 pb-3 pt-5 dark:from-neutral-950 dark:via-neutral-950 ' +
+          (isEdit ? 'bottom-0' : 'bottom-20')
+        }
       >
-        {pending ? (isEdit ? '저장 중…' : '만드는 중…') : isEdit ? '수정 완료' : '정산하기'}
-      </button>
+        <button
+          onClick={submit}
+          disabled={pending}
+          className="w-full rounded-2xl bg-brand py-4 text-base font-semibold text-white shadow-lg shadow-brand/20 transition active:scale-[0.99] disabled:opacity-50"
+        >
+          {pending ? (isEdit ? '저장 중…' : '만드는 중…') : isEdit ? '수정 완료' : '정산하기'}
+        </button>
+      </div>
 
       {/* 1/N 금액 숫자패드 */}
       <Numpad open={padOpen} amount={amount} onChange={setAmount} onClose={() => setPadOpen(false)} />

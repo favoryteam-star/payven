@@ -106,6 +106,14 @@ export function SettleBoard({
 
   const allSettled = pending.length === 0
   const accountIsReceiver = !!accountMemberId && pending.some((t) => t.to === accountMemberId)
+  // 진척 요약(컴포넌트는 props 개수만 셈 — settle 재계산 아님). 친구·관리 첫 화면에 마무리 임박감.
+  const totalTransfers = pending.length + done.length
+  const progressNote =
+    !allSettled && done.length > 0 ? (
+      <p className="mb-3 text-sm font-semibold text-brand-700 dark:text-brand">
+        {totalTransfers}건 중 {done.length}건 완료
+      </p>
+    ) : null
 
   // ── 공용 조각 ───────────────────────────────────────────────────
   const checkCard = (
@@ -215,6 +223,7 @@ export function SettleBoard({
     return (
       <div>
         <p className="mb-3 text-xs text-neutral-500 dark:text-neutral-400">정산 관리 · 받은 송금을 표시하거나 취소할 수 있어요</p>
+        {progressNote}
         {allSettled && checkCard}
         {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
         {fullBoard(true)}
@@ -247,6 +256,7 @@ export function SettleBoard({
     return (
       <div>
         {allSettled && checkCard}
+        {progressNote}
         {identityPrompt}
         {fullBoard(false)}
       </div>
