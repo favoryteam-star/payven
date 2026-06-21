@@ -1,7 +1,21 @@
 import { getAuthUser } from '@/server/auth'
 import { listUserAccounts } from '@/server/queries'
 import { IcoUser } from '@/components/icons'
+import { ThemeSwitch } from '@/components/ThemeToggle'
 import { AccountManager } from './_components/AccountManager'
+
+// 화면 테마 설정 행(로그인/비로그인 공통). 스위치는 클라이언트(ThemeSwitch).
+function ThemeSetting() {
+  return (
+    <section className="mt-8">
+      <p className="mb-2 text-sm font-medium text-neutral-500">화면</p>
+      <div className="flex items-center justify-between rounded-2xl border border-neutral-100 bg-neutral-50 px-5 py-4 dark:border-neutral-800 dark:bg-neutral-900">
+        <span className="text-[15px] font-medium">다크 모드</span>
+        <ThemeSwitch />
+      </div>
+    </section>
+  )
+}
 
 // 마이 탭 — 서버 컴포넌트로 세션을 읽어 로그인 상태 표시. 만들기 게이트는 정산하기 시점(별도).
 export default async function MyPage() {
@@ -30,6 +44,8 @@ export default async function MyPage() {
         </div>
         <AccountManager initial={accounts} />
 
+        <ThemeSetting />
+
         <form action="/auth/logout" method="post" className="mt-8">
           <button className="w-full rounded-2xl border border-neutral-200 py-3 text-sm font-medium text-neutral-500 transition hover:text-neutral-700 dark:border-neutral-700 dark:hover:text-neutral-300">
             로그아웃
@@ -57,6 +73,8 @@ export default async function MyPage() {
           카카오로 시작하기
         </a>
       </div>
+
+      <ThemeSetting />
     </main>
   )
 }

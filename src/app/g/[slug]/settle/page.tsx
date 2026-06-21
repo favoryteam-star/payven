@@ -77,7 +77,7 @@ export default async function SettlePage({ params }: Params) {
     items: r.items.map((it) => ({
       name: it.description,
       amount: it.amount,
-      participants: it.participants.map((id) => displayName(id)),
+      participants: it.participants.map((p) => ({ name: displayName(p.id), amount: p.amount })),
     })),
   }))
   const showDetails = snap.isItemized && detailRounds.length > 0
@@ -128,7 +128,7 @@ export default async function SettlePage({ params }: Params) {
         canManageAll={canManageAll}
       />
 
-      {showDetails && <SettleDetails rounds={detailRounds} memberCount={memberIds.length} />}
+      {showDetails && <SettleDetails rounds={detailRounds} />}
 
       <div className="mt-auto pt-8">
         <ShareButton title={`${snap.group.name} 정산`} />

@@ -43,7 +43,7 @@ export interface SettledTransfer {
 export interface SnapshotRoundItem {
   description: string // 메뉴명. RPC가 빈값을 '항목'으로 저장 → 표시 시 placeholder 폴백.
   amount: number
-  participants: string[] // 참여한 멤버 id(분담 행이 있는 멤버만)
+  participants: { id: string; amount: number }[] // 참여 멤버 id + 그 메뉴에서의 분담액
 }
 export interface SnapshotRound {
   payer: string // 낸 사람 멤버 id
@@ -318,7 +318,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
       round.items.push({
         description: e.description === '항목' ? '' : (e.description ?? ''),
         amount: e.amount,
-        participants: (sharesByExpense.get(e.id) ?? []).map((s) => s.memberId),
+        participants: (sharesByExpense.get(e.id) ?? []).map((s) => ({ id: s.memberId, amount: s.amount })),
       })
     }
     for (const k of order) snapshotRounds.push(byKey.get(k)!)

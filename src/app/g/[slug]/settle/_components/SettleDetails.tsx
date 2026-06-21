@@ -4,15 +4,14 @@ import { useState } from 'react'
 import { formatWon } from '@/domain/money'
 
 // page가 계산한 plain props만 받는다(이름은 displayName으로 이미 해석됨, 재계산 금지 — CLAUDE.md).
-type DetailItem = { name: string; amount: number; participants: string[] } // participants = 표시 이름
+type DetailParticipant = { name: string; amount: number } // 이름 + 그 메뉴에서의 분담액
+type DetailItem = { name: string; amount: number; participants: DetailParticipant[] }
 type DetailRound = { payerName: string; items: DetailItem[] }
 
-/** 공유 정산 페이지 '상세히 보기' — 차수→메뉴→참여자(어떤 정산이었는지 맥락). 기본 접힘. */
-export function SettleDetails({ rounds, memberCount }: { rounds: DetailRound[]; memberCount: number }) {
+/** 공유 정산 페이지 '상세히 보기' — 차수→메뉴→참여자(이름·분담액). 어떤 정산이었는지 맥락. 기본 접힘. */
+export function SettleDetails({ rounds }: { rounds: DetailRound[] }) {
   const [open, setOpen] = useState(false)
   const multi = rounds.length > 1 // 자리가 1개뿐이면 '1차' 라벨 생략(모임 규모 과장 방지)
-
-  const chip = 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300'
 
   return (
     <div className="mt-6">
@@ -57,15 +56,15 @@ export function SettleDetails({ rounds, memberCount }: { rounds: DetailRound[]; 
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className="text-xs text-neutral-500 dark:text-neutral-400">참여</span>
-                        {it.participants.length >= memberCount ? (
-                          <span className={chip}>전원</span>
-                        ) : (
-                          it.participants.map((name, pi) => (
-                            <span key={pi} className={chip}>
-                              {name}
-                            </span>
-                          ))
-                        )}
+                        {it.participants.map((p, pi) => (
+                          <span
+                            key={pi}
+                            className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1 text-xs dark:bg-neutral-800"
+                          >
+                            <span className="text-neutral-600 dark:text-neutral-300">{p.name}</span>
+                            <span className="num text-neutral-500 dark:text-neutral-400">{formatWon(p.amount)}</span>
+                          </span>
+                        ))}
                       </div>
                     </li>
                   ))}
