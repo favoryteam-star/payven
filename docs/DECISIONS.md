@@ -233,4 +233,4 @@
 - **마이 탭 출처 라벨 동적화(리뷰 확정):** 로그인 카드의 "카카오 로그인" 하드코딩 → `user.app_metadata.provider`로 분기(`구글 로그인`/`카카오 로그인`/폴백 `로그인됨`). 구글 사용자가 "카카오 로그인"으로 오표기되던 회귀 차단.
 - **외부 설정(코드 범위 밖, 사용자 수행):** Google Cloud OAuth 2.0 클라(웹) 생성 → 승인된 리디렉션 URI `https://gtssqmibfhkyffvrkhzy.supabase.co/auth/v1/callback` → Supabase Authentication → Providers → Google 활성(Client ID/Secret). 설정 전엔 구글 누르면 Supabase가 홈으로 되돌림(크래시 없음, 확인).
 - **검증:** test **66 green**(+8: next-path 5·ua 3)·lint·build(`/auth` ƒ Dynamic). 프리뷰 e2e: `/auth` 렌더·버튼 href provider별 정확·**악성 `next=https://evil.com`→`%2F` 떨굼**·라이트/다크 버튼 대비·만들기 게이트 시트 카카오·구글 버튼+draft 완전 보존·구글 클릭→`provider=google` 이동→Supabase 미설정 홈 바운스·콘솔 0. **적대적 리뷰(7에이전트 3렌즈)→확정 3건**(출처 라벨·`/auth` 카피 해요체 2건 반영, 1건 기각). 잔여(수동): 외부 설정 후 구글 OAuth 왕복 폰 스모크.
-- **상태:** 확정(미배포 — 외부 설정 + 폰 스모크 후 라이브). 코드 검증 완료.
+- **상태:** 확정·라이브(`8348224`). 외부 설정(Google Cloud OAuth 클라 + Supabase Google 활성) 완료, 서버 OAuth 체인 e2e(307→Supabase authorize→302→accounts.google.com), **폰 스모크 통과("다 잘돼") = M4 인증 종료.** (앱 "테스트" 모드 — 타인 공개는 구글 콘솔 '프로덕션 게시' 출시 전.)
