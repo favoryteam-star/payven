@@ -234,3 +234,12 @@
 - **외부 설정(코드 범위 밖, 사용자 수행):** Google Cloud OAuth 2.0 클라(웹) 생성 → 승인된 리디렉션 URI `https://gtssqmibfhkyffvrkhzy.supabase.co/auth/v1/callback` → Supabase Authentication → Providers → Google 활성(Client ID/Secret). 설정 전엔 구글 누르면 Supabase가 홈으로 되돌림(크래시 없음, 확인).
 - **검증:** test **66 green**(+8: next-path 5·ua 3)·lint·build(`/auth` ƒ Dynamic). 프리뷰 e2e: `/auth` 렌더·버튼 href provider별 정확·**악성 `next=https://evil.com`→`%2F` 떨굼**·라이트/다크 버튼 대비·만들기 게이트 시트 카카오·구글 버튼+draft 완전 보존·구글 클릭→`provider=google` 이동→Supabase 미설정 홈 바운스·콘솔 0. **적대적 리뷰(7에이전트 3렌즈)→확정 3건**(출처 라벨·`/auth` 카피 해요체 2건 반영, 1건 기각). 잔여(수동): 외부 설정 후 구글 OAuth 왕복 폰 스모크.
 - **상태:** 확정·라이브(`8348224`). 외부 설정(Google Cloud OAuth 클라 + Supabase Google 활성) 완료, 서버 OAuth 체인 e2e(307→Supabase authorize→302→accounts.google.com), **폰 스모크 통과("다 잘돼") = M4 인증 종료.** (앱 "테스트" 모드 — 타인 공개는 구글 콘솔 '프로덕션 게시' 출시 전.)
+
+### ADR-030 — 정산 이름 변경(비파괴) + 보관 토글(kind 지속 플래그)
+- **맥락(사용자 2026-06-22):** "1번 = 그룹 지속/이름 편집" 중 **범위를 '이름 편집 + 지속 플래그'로 선택**(누적잔액 그룹 본격 UI는 M6 cleanup 때). 빠른정산은 다 "빠른정산" 이름이라 내역탭 식별이 어려움 → 가벼운 이름 변경 + '보관' 표시.
+- **스키마 변경 0:** `groups.kind`(`'group'`=지속 | `'quick'`=임시, check·기본 'group'·cleanup용 idx까지)와 `name`이 이미 존재(0001). `SettlementSummary`도 이미 `kind` 보유. 마이그레이션·RPC 0.
+- **이름 변경 = 비파괴:** 교체(ADR-022, 자식·신원 wipe)와 달리 `name`만 갱신 → 멤버 id·송금완료(settlements) 불변. 신규 `renameGroup(ownerId, slug, name)` = `update groups set name where slug and owner_id`(**라이브 검증된 [[ADR-022]] `deleteGroup`과 owner 스코프 동일 패턴**, count 기반 ok). 정산결과 히어로가 커스텀 제목을 보여주므로 액션이 `/g/<slug>/settle`도 revalidate.
+- **보관 토글 = `kind` 플래그:** `setGroupKept(ownerId, slug, kept)` = `update groups set kind='group'|'quick'`. **자동삭제(M6 cleanup) 면제 표시** — cleanup이 아직 없어 지금은 식별/표시용(정직하게 '보관'으로 명명, '자동삭제 안 됨' 단언 안 함). 내역 카드에 `IcoBookmark`(brand) 배지.
+- **UI:** `HistoryCard` ⋯ 메뉴를 3모드(menu/rename/delete)로 — 이름 변경(인라인 input+저장/취소, 기존 삭제 확인 패턴 재사용)·보관/보관 해제·(divider)·수정·삭제. 빈 이름·무변경은 no-op. `kind` prop을 page가 전달.
+- **검증:** **test 66 green·lint·build**(`/history` 2.89→3.97 kB). 프리뷰: 로그아웃 `/history` 회귀 0(CTA·콘솔 0). **실DB e2e는 안전 분류기가 프로덕션 쓰기를 차단 → 미실행**(우회 안 함); 대신 owner 가드는 라이브 입증된 deleteGroup과 동일 패턴이라 위험 델타 0. **잔여(폰 스모크): 로그인 후 이름 변경·보관 토글·배지 UI**(owner-gated라 자동검증 불가, ADR-022 수정/삭제와 동일).
+- **상태:** 확정·라이브(배포 후). 코드 검증 완료.

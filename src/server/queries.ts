@@ -255,6 +255,30 @@ export async function deleteGroup(ownerId: string, slug: string): Promise<{ ok: 
   return { ok: (count ?? 0) > 0 }
 }
 
+/** 정산 이름 변경(내역). 본인 것만(owner_id 스코프). 비파괴 — name만 갱신, 자식·신원 불변. */
+export async function renameGroup(ownerId: string, slug: string, name: string): Promise<{ ok: boolean }> {
+  const supa = getAdminClient()
+  const { error, count } = await supa
+    .from('groups')
+    .update({ name }, { count: 'exact' })
+    .eq('slug', slug)
+    .eq('owner_id', ownerId)
+  if (error) throw new Error(error.message)
+  return { ok: (count ?? 0) > 0 }
+}
+
+/** 정산 보관 토글(kind). 'group'=지속(보관) | 'quick'=임시. 본인 것만. count=0이면 남의 것/없음. */
+export async function setGroupKept(ownerId: string, slug: string, kept: boolean): Promise<{ ok: boolean }> {
+  const supa = getAdminClient()
+  const { error, count } = await supa
+    .from('groups')
+    .update({ kind: kept ? 'group' : 'quick' }, { count: 'exact' })
+    .eq('slug', slug)
+    .eq('owner_id', ownerId)
+  if (error) throw new Error(error.message)
+  return { ok: (count ?? 0) > 0 }
+}
+
 /** 그룹 전체 스냅샷(멤버/지출+분담/정산)을 도메인 형태로 매핑. 읽기 전용. */
 export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null> {
   const supa = getAdminClient()

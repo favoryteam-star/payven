@@ -47,6 +47,7 @@ export default async function HistoryPage() {
               key={s.slug}
               slug={s.slug}
               name={s.name}
+              kind={s.kind}
               metaLabel={`${s.memberCount}명 · ${formatRelativeDay(s.createdAt, now)}`}
               totalLabel={formatWon(s.total)}
             />

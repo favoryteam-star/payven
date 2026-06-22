@@ -177,6 +177,20 @@ export type UpdateItemizedBillInput = z.infer<typeof updateItemizedBillSchema>
 export const deleteGroupSchema = z.object({ slug: slugSchema })
 export type DeleteGroupInput = z.infer<typeof deleteGroupSchema>
 
+// 정산 이름 변경(내역) — 이름 식별이 목적이라 빈 이름은 거부(교체 ADR-022와 달리 비파괴).
+export const renameGroupSchema = z.object({
+  slug: slugSchema,
+  name: z.string().trim().min(1, '이름을 입력해 주세요').max(50),
+})
+export type RenameGroupInput = z.infer<typeof renameGroupSchema>
+
+// 정산 보관 토글(kind) — kept=true → 'group'(지속, 자동삭제 면제), false → 'quick'(임시).
+export const setGroupKeptSchema = z.object({
+  slug: slugSchema,
+  kept: z.boolean(),
+})
+export type SetGroupKeptInput = z.infer<typeof setGroupKeptSchema>
+
 // ── 공유 정산 페이지의 송금완료(settlements) — 무로그인 공개 write ──
 // from/to는 그 그룹 멤버 uuid(서버에서 멤버십·net 재검증).
 

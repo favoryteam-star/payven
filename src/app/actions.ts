@@ -8,7 +8,9 @@ import {
   itemizedBillSchema,
   markSentSchema,
   quickSettleSchema,
+  renameGroupSchema,
   saveAccountSchema,
+  setGroupKeptSchema,
   undoSettlementSchema,
   updateAccountSchema,
   updateItemizedBillSchema,
@@ -24,7 +26,9 @@ import {
   listRecentMemberNames,
   listUserAccounts,
   recordSettlement,
+  renameGroup,
   setDefaultUserAccount,
+  setGroupKept,
   undoSettlement,
   updateItemizedBill,
   updateQuickSettle,
@@ -107,6 +111,29 @@ export const deleteGroupAction = withRateLimit(async (raw: unknown): Promise<Del
   const { slug } = deleteGroupSchema.parse(raw)
   const res = await deleteGroup(user.id, slug)
   if (!res.ok) return { ok: false, error: '삭제하지 못했어요' }
+  revalidatePath('/history')
+  return { ok: true }
+})
+
+// 이름 변경 = 비파괴(name만). 정산결과 히어로도 커스텀 제목을 보여주므로 그 페이지도 revalidate.
+export const renameGroupAction = withRateLimit(async (raw: unknown): Promise<DeleteResult> => {
+  const user = await getAuthUser()
+  if (!user) return { ok: false, needLogin: true }
+  const { slug, name } = renameGroupSchema.parse(raw)
+  const res = await renameGroup(user.id, slug, name)
+  if (!res.ok) return { ok: false, error: '이름을 바꾸지 못했어요' }
+  revalidatePath('/history')
+  revalidatePath(`/g/${slug}/settle`)
+  return { ok: true }
+})
+
+// 보관 토글 = kind('group'↔'quick'). 자동삭제(M6 cleanup) 면제 표시. 내역 목록만 갱신.
+export const setGroupKeptAction = withRateLimit(async (raw: unknown): Promise<DeleteResult> => {
+  const user = await getAuthUser()
+  if (!user) return { ok: false, needLogin: true }
+  const { slug, kept } = setGroupKeptSchema.parse(raw)
+  const res = await setGroupKept(user.id, slug, kept)
+  if (!res.ok) return { ok: false, error: '바꾸지 못했어요' }
   revalidatePath('/history')
   return { ok: true }
 })
