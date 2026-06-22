@@ -510,7 +510,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
           placeholder="예: 제주 여행"
           aria-label="정산 제목"
           maxLength={50}
-          className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] font-medium outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
+          className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[16px] font-medium outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
         />
       </section>
 
@@ -602,7 +602,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                             placeholder={`메뉴 ${ii + 1}`}
                             aria-label={`메뉴 ${ii + 1} 이름`}
                             onChange={(e) => patchItem(r, ii, { name: e.target.value })}
-                            className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[15px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700 dark:bg-neutral-950"
+                            className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[16px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700 dark:bg-neutral-950"
                           />
                           <button onClick={() => setPadTarget({ r, i: ii })} className={amountBtnCls}>
                             {it.amount > 0 ? (
@@ -672,7 +672,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                 onChange={(e) => setMember(i, e.target.value)}
                 onKeyDown={(e) => onMemberKeyDown(e, i)}
                 enterKeyHint="next"
-                className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
+                className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[16px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
               />
               {members.length > 2 && (
                 <button

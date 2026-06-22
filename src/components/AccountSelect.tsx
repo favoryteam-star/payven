@@ -87,7 +87,7 @@ export function resolveAccount(
 }
 
 const fieldCls =
-  'w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] outline-none focus:border-brand dark:border-neutral-700'
+  'w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[16px] outline-none focus:border-brand dark:border-neutral-700'
 
 /**
  * 받을 계좌 필드. 저장 계좌가 있으면 칩 선택, 없으면 인라인 입력(은행/계좌/예금주).

@@ -135,7 +135,7 @@ export function HistoryCard({
                     if (e.key === 'Escape') close()
                   }}
                   aria-label="정산 이름"
-                  className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus-visible:border-brand dark:border-neutral-600 dark:bg-neutral-900"
+                  className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[16px] outline-none focus-visible:border-brand dark:border-neutral-600 dark:bg-neutral-900"
                 />
                 {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
                 <div className="mt-2 flex gap-2">

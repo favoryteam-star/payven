@@ -23,7 +23,7 @@ type FormState = {
 }
 
 const inputCls =
-  'w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[15px] outline-none focus:border-brand dark:border-neutral-700'
+  'w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[16px] outline-none focus:border-brand dark:border-neutral-700'
 
 // 클라 1차 검증(서버 zod와 동일 규칙). 통과 못 하면 메시지 반환.
 function validate(f: FormState): string | null {
