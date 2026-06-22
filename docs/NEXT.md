@@ -170,8 +170,9 @@
 1. ✅ `64a5028`·iOS 줌 수정 푸시·배포 완료.
 2. ✅ **폰 스모크(누적) 통과(2026-06-22, 사용자 "문제 없어")** — 내역 이름변경/보관·뒤로가기·진행도·구글/카카오 로그인·마이 계좌 CRUD·만들기 자동채움·웨이브2 신원/보냈어요·단위 반올림·수정/삭제 전부 정상. iOS 입력 포커스 줌도 수정 확인.
 3. ✅ **M6 레이트리밋 활성(2026-06-22, `95dc403`):** Vercel **Upstash for Redis 통합** 연결(Tokyo·Free·`KV_REST_API_URL/TOKEN` 자동 주입, payven Production+Preview) + **프로덕션 fail-fast 가드**(env 없으면 throw=fail-closed / dev는 graceful no-op, `KV_*`·`UPSTASH_REDIS_REST_*` 둘 다 인식). build·test 66·lint green + 일회용 가드 테스트(prod throw/dev no-op) + 배포 READY·라이브 200. **✅ 라이브 정산 생성 폰 확인(2026-06-22)** — `정산하기`(레이트리밋 write) 성공·결과 보드 렌더 정상 = Upstash env 정상 주입, **레이트리밋 완전 검증 완료**(미설정이면 fail-closed라 에러 떴을 것).
-4. ▶ **남은 M6(완전공개 직전 한 세션, 응급 아님):** 키/토큰 롤(Supabase service_role + MCP 토큰 — 공개 유출 아님 확인됨, 완전공개 직전 1회) + **구글 프로덕션 게시**(consent screen Testing→In production; email/profile 기본 스코프라 별도 심사 없이 게시). cleanup은 제외(ADR-033).
-5. **앱 스토어 출시(사용자 결정: M6 후):** 라이브 사이트를 셸로 — 안드로이드 **TWA**(구글 OAuth 그대로 OK)부터 → iOS **Capacitor**(웹뷰서 구글 OAuth 막혀 시스템브라우저 처리 + 애플 4.2 심사 주의). (선택) 커스텀 도메인.
+4. ✅ **구글 프로덕션 게시 = 이미 완료**(2026-06-22 확인 — Google 인증 플랫폼 `대상` 게시상태=**프로덕션 단계**, 버튼이 '테스트로 돌아가기'라 현재 프로덕션 확정. 기본 스코프 email/profile이라 무심사·전 구글계정 로그인 가능. 메모리 '테스트 모드' 기록은 오류였음). → **M6 잔여 = 키/토큰 롤 1개뿐, 출시 직전으로 결정**(키 유출 아님·do-once·프로덕션 깨질 위험·MCP 끊김 회피).
+   - **키롤 체크리스트(출시/앱스토어 직전 한 방):** ① Supabase Dashboard→Settings→API→service_role(또는 sb_secret) 재발급 ② Vercel env `SUPABASE_SERVICE_ROLE_KEY`(Production+Preview)·`SUPABASE_ANON_KEY` 새 값으로 교체 ③ 로컬 `.env.local` 동일 교체 ④ 재배포 후 라이브 write 1회 확인(정산 생성) ⑤ (선택) `.mcp.json` Supabase MCP 토큰 재발급(이 세션 MCP 끊김 주의).
+5. ▶ **앱 스토어(다음 단계, 사용자 결정 M6 후):** **PWA = TWA-ready 확인**(manifest standalone·192/512/512-maskable·theme #0FA177/bg·HTTPS·SW 다 충족). 안드로이드 **TWA** 먼저(구글 OAuth 그대로 OK) — 권장 경로 **PWABuilder.com**(URL 넣으면 AAB 패키징+서명+assetlinks.json 발급). 필요: **Google Play 개발자 계정($25 1회)**. 받은 SHA-256 지문으로 `/.well-known/assetlinks.json`을 사이트에 호스팅(도메인 소유 검증) — repo에 라우트 추가는 내가. 그다음 iOS **Capacitor**(웹뷰서 구글 OAuth 막혀 시스템브라우저 처리 + 애플 4.2 심사 주의). (선택) 커스텀 도메인.
 6. (틈날 때) 문서 V2 전체 갱신(CLAUDE/PLAN/ARCHITECTURE가 V0 무로그인 기준 — 무거운 작업).
 
 — 이하 옛 시작점 메모(참고용, 대부분 ✅ 완료):
