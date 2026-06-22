@@ -1,3 +1,4 @@
+import 'server-only'
 import { z } from 'zod'
 import { BANKS } from '@/lib/banks'
 
