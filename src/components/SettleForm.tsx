@@ -478,6 +478,65 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       </div>
     ) : null
 
+  // 참여자(공유) — 항목별은 차수 위에, 1/N·쏘기는 금액 아래에 위치(아래 렌더 순서로 분기). 한 번만 렌더됨.
+  const membersSection = (
+    <section ref={refFor('members')} className="mb-5">
+      <p className="mb-2 text-sm font-medium text-neutral-500">누구랑 나눠요?</p>
+      <div className="flex flex-col gap-2">
+        {members.map((m, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              ref={(el) => {
+                memberRefs.current[i] = el
+              }}
+              value={m}
+              placeholder={i === 0 ? '내 이름' : '친구 이름'}
+              aria-label={i === 0 ? '내 이름' : `친구 ${i} 이름`}
+              onChange={(e) => setMember(i, e.target.value)}
+              onKeyDown={(e) => onMemberKeyDown(e, i)}
+              enterKeyHint="next"
+              className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[16px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
+            />
+            {members.length > 2 && (
+              <button
+                onClick={() => removeMember(i)}
+                aria-label={`${i === 0 ? '나' : `친구 ${i}`} 삭제`}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base leading-none text-neutral-400 transition active:scale-90 hover:bg-neutral-100 hover:text-neutral-500 dark:hover:bg-neutral-800"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={addMember}
+        className="-mx-1.5 mt-1 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"
+      >
+        <IcoPlus className="h-4 w-4" /> 사람 추가
+      </button>
+
+      {/* 최근 참여자 빠른 추가 — 과거 정산에서 쓴 이름을 탭으로(매번 타이핑 안 하게). */}
+      {memberSuggestions.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs text-neutral-500 dark:text-neutral-400">최근 같이 정산한 사람</p>
+          <div className="flex flex-wrap gap-2">
+            {memberSuggestions.map((n) => (
+              <button
+                key={n}
+                onClick={() => addNamedMember(n)}
+                className="inline-flex items-center gap-1 rounded-full border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition active:scale-95 hover:border-brand hover:text-brand-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand"
+              >
+                <IcoPlus className="h-3.5 w-3.5" /> {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {errorField === 'members' && error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+    </section>
+  )
+
   return (
     <main
       className={
@@ -539,6 +598,9 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
           className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[16px] font-medium outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
         />
       </section>
+
+      {/* 항목별은 멤버를 먼저(차수의 참여·낸사람 칩이 멤버에 의존). 1/N·쏘기는 금액 아래에 렌더. */}
+      {mode === 'items' && membersSection}
 
       {/* 맨 위 입력 — 1/N·쏘기는 금액 한 칸, 항목별은 차수 묶음 */}
       {isAmountMode ? (
@@ -682,62 +744,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         <p className="-mt-2 mb-4 text-sm text-red-500">{error}</p>
       )}
 
-      {/* 참여자 (공유) */}
-      <section ref={refFor('members')} className="mb-5">
-        <p className="mb-2 text-sm font-medium text-neutral-500">누구랑 나눠요?</p>
-        <div className="flex flex-col gap-2">
-          {members.map((m, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                ref={(el) => {
-                  memberRefs.current[i] = el
-                }}
-                value={m}
-                placeholder={i === 0 ? '내 이름' : '친구 이름'}
-                aria-label={i === 0 ? '내 이름' : `친구 ${i} 이름`}
-                onChange={(e) => setMember(i, e.target.value)}
-                onKeyDown={(e) => onMemberKeyDown(e, i)}
-                enterKeyHint="next"
-                className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[16px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
-              />
-              {members.length > 2 && (
-                <button
-                  onClick={() => removeMember(i)}
-                  aria-label={`${i === 0 ? '나' : `친구 ${i}`} 삭제`}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base leading-none text-neutral-400 transition active:scale-90 hover:bg-neutral-100 hover:text-neutral-500 dark:hover:bg-neutral-800"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        <button
-          onClick={addMember}
-          className="-mx-1.5 mt-1 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"
-        >
-          <IcoPlus className="h-4 w-4" /> 사람 추가
-        </button>
-
-        {/* 최근 참여자 빠른 추가 — 과거 정산에서 쓴 이름을 탭으로(매번 타이핑 안 하게). */}
-        {memberSuggestions.length > 0 && (
-          <div className="mt-3">
-            <p className="mb-1.5 text-xs text-neutral-500 dark:text-neutral-400">최근 같이 정산한 사람</p>
-            <div className="flex flex-wrap gap-2">
-              {memberSuggestions.map((n) => (
-                <button
-                  key={n}
-                  onClick={() => addNamedMember(n)}
-                  className="inline-flex items-center gap-1 rounded-full border border-neutral-200 px-3 py-2 text-sm text-neutral-600 transition active:scale-95 hover:border-brand hover:text-brand-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-brand"
-                >
-                  <IcoPlus className="h-3.5 w-3.5" /> {n}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {errorField === 'members' && error && <p className="mt-2 text-sm text-red-500">{error}</p>}
-      </section>
+      {/* 참여자 — 1/N·쏘기는 금액 아래(여기), 항목별은 차수 위(맨 위 입력 앞)에 렌더 */}
+      {mode !== 'items' && membersSection}
 
       {/* 낸 사람 — 1/N·쏘기(항목별은 차수마다 '낸 사람'을 따로 고름). 쏘기는 먼저 결제한 사람(진 사람이 갚을 대상). */}
       {isAmountMode && filledIdx.length >= 1 && (
