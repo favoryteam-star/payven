@@ -18,10 +18,35 @@ type Params = { params: Promise<{ slug: string }> }
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params
   const snap = await loadGroup(slug)
+  if (!snap) return { title: '정산', robots: { index: false, follow: false } }
+
+  // 기본 모드명('빠른정산'/'항목별 정산')이면 제목에 ' 정산'을 안 붙임(중복 "빠른정산 정산" 방지).
+  const customName = ['빠른정산', '항목별 정산'].includes(snap.group.name) ? null : snap.group.name
+  const title = customName ? `${customName} 정산` : snap.group.name
+  // 설명 = 맥락 한 줄: "{낸 사람}님이 결제 · 총 N원 · N명". 받는 사람은 예금주 실명 우선.
+  const dispName = (id: string) => {
+    const m = snap.members.find((mm) => mm.id === id)
+    return m?.accountHolder || m?.name || '?'
+  }
+  const total = snap.expenses.reduce((sum, e) => sum + e.amount, 0)
+  const payerIds = [...new Set(snap.expenses.map((e) => e.paidBy))]
+  const payerText =
+    payerIds.length === 1 ? `${dispName(payerIds[0])}님이 결제` : payerIds.length > 1 ? '여러 명이 결제' : null
+  const description = `${payerText ? payerText + ' · ' : ''}총 ${formatWon(total)} · ${snap.members.length}명`
+
   return {
-    title: snap ? `${snap.group.name} 정산` : '정산',
-    description: '페이븐 — 링크로 끝내는 더치페이',
+    title,
+    description,
     robots: { index: false, follow: false },
+    // openGraph는 부모(layout) 것을 통째로 덮으므로 image·siteName까지 여기서 다시 명시.
+    openGraph: {
+      title,
+      description,
+      siteName: '페이븐',
+      type: 'website',
+      locale: 'ko_KR',
+      images: ['/og.png'],
+    },
   }
 }
 
