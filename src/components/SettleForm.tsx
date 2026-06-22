@@ -483,7 +483,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       className={
         isEdit
           ? 'flex min-h-[100dvh] flex-col px-5 pb-10 pt-6'
-          : 'flex min-h-[calc(100dvh-5rem)] flex-col px-5 pt-6'
+          // 하단 예약 = 탭바 높이(safe-area 포함) → sticky CTA가 탭바 바로 위에 붙음(전엔 5rem=80px라 떠 있었음).
+          : 'flex min-h-[calc(100dvh_-_4rem_-_env(safe-area-inset-bottom))] flex-col px-5 pt-6'
       }
     >
       {isEdit ? (
@@ -1008,17 +1009,11 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       {/* 1차 액션 — 입력하다 매번 끝까지 스크롤 안 하게 하단 sticky(홈은 탭바 위, 수정은 맨 아래). */}
       <div
         className={
-          // 표준 하단 CTA 스크림: 위로만 짧게 fade(스크롤 콘텐츠가 버튼 뒤로 자연스럽게 사라짐),
-          // 버튼·아래는 솔리드(페이지 배경색과 동일 → 탭바까지 이음매 없이 깔끔). 홈=탭바 위(bottom-20).
-          'sticky z-30 -mx-5 mt-auto px-5 pb-3 pt-8 bg-gradient-to-t from-white via-white via-65% to-transparent dark:from-neutral-950 dark:via-neutral-950 ' +
-          (isEdit ? 'bottom-0' : 'bottom-20')
+          // 스크림 없이 버튼만 그림자로 떠 있게(사용자 선호). bottom = 탭바 높이(safe 포함)라 탭바 바로 위에 붙음.
+          'sticky z-30 -mx-5 mt-auto px-5 pt-3 pb-2 ' +
+          (isEdit ? 'bottom-0' : 'bottom-[calc(4rem_+_env(safe-area-inset-bottom))]')
         }
       >
-        {/* 버튼 아래~탭바 사이 틈을 페이지색으로 메워 이음매 제거(bottom-20이 탭바보다 높아 생기던 틈).
-            탭바(z-40)가 위에 덮으므로 safe-area 무관. 수정 화면은 탭바가 없어 불필요. */}
-        {!isEdit && (
-          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-full h-24 bg-white dark:bg-neutral-950" />
-        )}
         <button
           onClick={submit}
           disabled={pending}
