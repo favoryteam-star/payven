@@ -1,6 +1,5 @@
 import { cache } from 'react'
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { formatWon } from '@/domain/money'
 import { formatMonthDay } from '@/lib/datetime'
@@ -8,9 +7,9 @@ import { minimizeCashFlow, netBalances } from '@/domain/settle'
 import { getGroupBySlug } from '@/server/queries'
 import { getAuthUser } from '@/server/auth'
 import { ShareButton } from '@/components/ShareButton'
-import { IcoBack } from '@/components/icons'
 import { SettleBoard } from './_components/SettleBoard'
 import { SettleDetails } from './_components/SettleDetails'
+import { SettleBackLink } from './_components/SettleBackLink'
 
 const loadGroup = cache(getGroupBySlug)
 
@@ -84,12 +83,7 @@ export default async function SettlePage({ params }: Params) {
 
   return (
     <main className="flex min-h-dvh flex-col px-5 pb-8 pt-5">
-      <Link
-        href="/"
-        className="-ml-1 inline-flex items-center gap-1 text-sm text-neutral-400 transition active:opacity-70 hover:text-neutral-700 dark:hover:text-neutral-200"
-      >
-        <IcoBack className="h-5 w-5" /> 새 정산
-      </Link>
+      <SettleBackLink />
 
       {/* 히어로(요약) — 1인당은 표시 안 함(반올림·흡수자로 사람마다 다를 수 있어 오해 소지). */}
       <section className="mb-7 mt-5 text-center">

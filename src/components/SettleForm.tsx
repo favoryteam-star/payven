@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { formatWon } from '@/domain/money'
 import { equalSplit } from '@/domain/settle'
@@ -469,13 +468,16 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     >
       {isEdit ? (
         <header className="mb-4 flex items-center gap-2">
-          <Link
-            href={`/g/${editSlug}/settle`}
+          <button
+            type="button"
+            onClick={() =>
+              window.history.length > 1 ? router.back() : router.push(`/g/${editSlug}/settle`)
+            }
             aria-label="뒤로"
             className="-ml-1.5 flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 transition active:scale-95 hover:bg-neutral-100 dark:hover:bg-neutral-800"
           >
             <IcoBack className="h-5 w-5" />
-          </Link>
+          </button>
           <h1 className="text-xl font-bold tracking-tight">정산 수정</h1>
         </header>
       ) : (

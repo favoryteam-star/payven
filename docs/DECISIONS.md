@@ -242,4 +242,13 @@
 - **보관 토글 = `kind` 플래그:** `setGroupKept(ownerId, slug, kept)` = `update groups set kind='group'|'quick'`. **자동삭제(M6 cleanup) 면제 표시** — cleanup이 아직 없어 지금은 식별/표시용(정직하게 '보관'으로 명명, '자동삭제 안 됨' 단언 안 함). 내역 카드에 `IcoBookmark`(brand) 배지.
 - **UI:** `HistoryCard` ⋯ 메뉴를 3모드(menu/rename/delete)로 — 이름 변경(인라인 input+저장/취소, 기존 삭제 확인 패턴 재사용)·보관/보관 해제·(divider)·수정·삭제. 빈 이름·무변경은 no-op. `kind` prop을 page가 전달.
 - **검증:** **test 66 green·lint·build**(`/history` 2.89→3.97 kB). 프리뷰: 로그아웃 `/history` 회귀 0(CTA·콘솔 0). **실DB e2e는 안전 분류기가 프로덕션 쓰기를 차단 → 미실행**(우회 안 함); 대신 owner 가드는 라이브 입증된 deleteGroup과 동일 패턴이라 위험 델타 0. **잔여(폰 스모크): 로그인 후 이름 변경·보관 토글·배지 UI**(owner-gated라 자동검증 불가, ADR-022 수정/삭제와 동일).
-- **상태:** 확정·라이브(배포 후). 코드 검증 완료.
+- **상태:** 확정·라이브(`b93a1f2`). 폰 스모크 잔여.
+
+### ADR-031 — 뒤로가기 컨텍스트 인식(settle·edit)
+- **맥락(사용자 2026-06-22):** "뒤로가기들을 잘 알맞게". 스택 페이지의 뒤로 affordance가 **온 곳이 아니라 고정 목적지**로 가던 문제 — settle "← 새 정산"은 **항상 홈**(내역에서 들어와도 홈으로), edit "← 뒤로"는 **항상 settle**(내역 '수정'으로 왔는데 취소하면 settle로).
+- **원칙:** 뒤로 affordance = **온 곳으로 복귀**(device 뒤로 미러). 구현 = `router.back()` + 히스토리 없을 때(공유 링크로 바로 진입) 폴백. 판정 = `window.history.length > 1`(외부 새 탭·인앱 브라우저=1).
+- **settle(`SettleBackLink`, 신규 `'use client'`):** 내부 진입 → "← 뒤로"(`router.back()` → 내역/홈 복귀) / 외부 진입 → "← 새 정산"(홈 Link, **공유 링크 방문자에게 CTA 유지**). 마운트 후 판정(SSR=false 일치, 라벨 플리커는 테마 토글 등 기존 패턴과 동일 허용). settle 하단에 별도 '새 정산' CTA가 없어 외부 폴백은 이 라벨을 유지.
+- **edit(SettleForm):** Link → `<button>`, **클릭 시점 판정**(라벨 'icon'만이라 플리커 0): `history.length>1 ? router.back() : router.push(/g/<slug>/settle)`. 내역 '수정'으로 왔으면 취소가 내역으로 복귀.
+- **건드리지 않음:** `/auth`의 '홈으로'(edit 게이트 재진입 루프 방지로 의도적 고정 — `router.back`이면 edit→/auth 무한루프) · 탭(홈/내역/마이, 탭바라 뒤로 불필요) · device 하드웨어 뒤로(`?resume=1`은 replaceState로 이미 정리, draft는 소비 즉시 제거라 재제출 루프 없음).
+- **검증:** test 66·lint·build green. 프리뷰: settle 내부 진입 시 "뒤로" 버튼 렌더(historyLength 3)→클릭→홈 복귀(router.back), 콘솔 0. edit는 로그인 게이트라 폰 스모크 잔여(클릭 시점 로직이라 위험 낮음).
+- **상태:** 확정·라이브(배포 후).
