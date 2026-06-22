@@ -550,7 +550,12 @@ export async function recordSettlement(
     to_member: toId,
     amount,
   })
-  if (error) throw new Error(error.message)
+  // 동시 클릭(TOCTOU): net 가드를 둘 다 통과해도 유니크 인덱스(0012 settlements_dedup_uniq)가
+  // 두 번째 insert를 거부(23505) → 중복기록 대신 '이미 정산됐어요'로 수렴.
+  if (error) {
+    if (error.code === '23505') return { ok: false, reason: 'settled' }
+    throw new Error(error.message)
+  }
   return { ok: true }
 }
 
