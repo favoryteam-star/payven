@@ -50,6 +50,8 @@ export default async function HistoryPage() {
               kind={s.kind}
               metaLabel={`${s.memberCount}명 · ${formatRelativeDay(s.createdAt, now)}`}
               totalLabel={formatWon(s.total)}
+              doneTransfers={s.doneTransfers}
+              totalTransfers={s.totalTransfers}
             />
           ))}
         </ul>

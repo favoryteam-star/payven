@@ -251,4 +251,12 @@
 - **edit(SettleForm):** Link → `<button>`, **클릭 시점 판정**(라벨 'icon'만이라 플리커 0): `history.length>1 ? router.back() : router.push(/g/<slug>/settle)`. 내역 '수정'으로 왔으면 취소가 내역으로 복귀.
 - **건드리지 않음:** `/auth`의 '홈으로'(edit 게이트 재진입 루프 방지로 의도적 고정 — `router.back`이면 edit→/auth 무한루프) · 탭(홈/내역/마이, 탭바라 뒤로 불필요) · device 하드웨어 뒤로(`?resume=1`은 replaceState로 이미 정리, draft는 소비 즉시 제거라 재제출 루프 없음).
 - **검증:** test 66·lint·build green. 프리뷰: settle 내부 진입 시 "뒤로" 버튼 렌더(historyLength 3)→클릭→홈 복귀(router.back), 콘솔 0. edit는 로그인 게이트라 폰 스모크 잔여(클릭 시점 로직이라 위험 낮음).
+- **상태:** 확정·라이브(`d09cc74`).
+
+### ADR-032 — 내역 카드 정산 진행도(보냈어요 N/M)
+- **맥락(사용자 2026-06-22):** "내역에서 몇 명 완료됐고 이런 것도 있으면 좋겠다". 내역 카드에 정산 완료 현황 노출.
+- **지표:** `남은 송금(minimizeCashFlow) + 완료(보냈어요 settlements 수) = 전체`. settlements가 net에 반영돼([[ADR-015]]) 남은 송금은 minimizeCashFlow 길이. **정산 페이지가 쓰는 검증된 도메인 함수(netBalances→minimizeCashFlow) 그대로 재사용** — 새 계산 로직 0.
+- **쿼리(`listGroupsByOwner` 확장):** 3쿼리→**5쿼리**(그룹 + 멤버/지출/정산 IN + 분담 IN), N+1 없음. 그룹별로 ExpenseRecord·SettlementRecord 재구성(getGroupBySlug 그룹핑 패턴) 후 도메인 계산. 데이터 불일치(net≠0 등)면 try/catch로 진행도 0(목록 전체 안 깨짐). `SettlementSummary`에 `doneTransfers`·`totalTransfers` 추가.
+- **UI(`HistoryCard`):** 메타 줄(`N명 · 날짜`) 끝에 `totalTransfers>0`일 때만 — 완료=`✓ 정산 완료`(brand) / 진행 중=`{done}/{total} 완료`(amber) / 미시작=`0/{total} 완료`(neutral). 송금 불필요(딱 맞음·1명, total=0)는 미표시.
+- **검증:** test 66·lint·build green. **실DB 손검증(read-only):** 실제 3인 그룹(나 20,000 결제→net 나 +13,332·김철수/홍길동 −6,666)에서 `totalTransfers=2` 정확 일치. 현재 owner 그룹엔 settlements 0건이라 라이브는 전부 `0/N`(완료/진행 색은 폰 스모크). 내역탭 로그인 게이트라 카드 자동 프리뷰 불가(다른 owner-gated 기능과 동일). **DB 쓰기는 안전 분류기가 차단해 e2e 미실행(우회 안 함)** — 계산은 도메인 66테스트 + 손검증으로 담보.
 - **상태:** 확정·라이브(배포 후).

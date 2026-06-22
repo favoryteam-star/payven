@@ -1,7 +1,7 @@
 import 'server-only'
 import { nanoid } from 'nanoid'
 import { getAdminClient } from './db'
-import { equalSplit, netBalances, splitByWeights } from '@/domain/settle'
+import { equalSplit, minimizeCashFlow, netBalances, splitByWeights } from '@/domain/settle'
 import type { ExpenseRecord, SettlementRecord } from '@/domain/types'
 import type {
   ItemizedBillInput,
@@ -584,11 +584,14 @@ export interface SettlementSummary {
   createdAt: string
   memberCount: number
   total: number // 정수 원
+  doneTransfers: number // 완료된 송금(보냈어요) 수
+  totalTransfers: number // 전체 송금 수(완료 + 남음). 0이면 정산할 게 없음(딱 맞음/1명).
 }
 
 /**
  * 로그인 사용자가 만든 정산 목록(최신순). 내역탭(Server Component)이 직접 호출하는 읽기.
- * owner_id 없는(무로그인 생성) 정산은 제외. N+1 없이 3쿼리(그룹→멤버/지출 한 번씩)로 집계.
+ * owner_id 없는(무로그인 생성) 정산은 제외. N+1 없이 5쿼리(그룹 + 멤버/지출/분담/정산 IN 한 번씩)로
+ * 집계 + 그룹별 정산 진행도(도메인 netBalances→minimizeCashFlow로 남은 송금 + 보냈어요 수).
  */
 export async function listGroupsByOwner(ownerId: string): Promise<SettlementSummary[]> {
   const supa = getAdminClient()
@@ -601,30 +604,77 @@ export async function listGroupsByOwner(ownerId: string): Promise<SettlementSumm
   if (!groups || groups.length === 0) return []
 
   const ids = groups.map((g) => g.id)
-  const [membersRes, expensesRes] = await Promise.all([
-    supa.from('members').select('group_id').in('group_id', ids),
-    supa.from('expenses').select('group_id, amount').in('group_id', ids),
+  const [membersRes, expensesRes, settlementsRes] = await Promise.all([
+    supa.from('members').select('id, group_id').in('group_id', ids),
+    supa.from('expenses').select('id, group_id, amount, paid_by').in('group_id', ids),
+    supa.from('settlements').select('group_id, from_member, to_member, amount').in('group_id', ids),
   ])
   if (membersRes.error) throw new Error(membersRes.error.message)
   if (expensesRes.error) throw new Error(expensesRes.error.message)
+  if (settlementsRes.error) throw new Error(settlementsRes.error.message)
 
-  const memberCount = new Map<string, number>()
+  const expenseRows = expensesRes.data ?? []
+  const expenseIds = expenseRows.map((e) => e.id)
+  const sharesRes = expenseIds.length
+    ? await supa.from('expense_shares').select('expense_id, member_id, amount').in('expense_id', expenseIds)
+    : { data: [], error: null }
+  if (sharesRes.error) throw new Error(sharesRes.error.message)
+
+  // 그룹별로 묶기(진행도 계산용).
+  const membersByGroup = new Map<string, string[]>()
   for (const m of membersRes.data ?? []) {
-    memberCount.set(m.group_id, (memberCount.get(m.group_id) ?? 0) + 1)
+    const arr = membersByGroup.get(m.group_id) ?? []
+    arr.push(m.id)
+    membersByGroup.set(m.group_id, arr)
   }
+  const sharesByExpense = new Map<string, { memberId: string; amount: number }[]>()
+  for (const s of sharesRes.data ?? []) {
+    const arr = sharesByExpense.get(s.expense_id) ?? []
+    arr.push({ memberId: s.member_id, amount: s.amount })
+    sharesByExpense.set(s.expense_id, arr)
+  }
+  const expensesByGroup = new Map<string, ExpenseRecord[]>()
   const totalByGroup = new Map<string, number>()
-  for (const e of expensesRes.data ?? []) {
+  for (const e of expenseRows) {
     totalByGroup.set(e.group_id, (totalByGroup.get(e.group_id) ?? 0) + e.amount)
+    const arr = expensesByGroup.get(e.group_id) ?? []
+    arr.push({ amount: e.amount, paidBy: e.paid_by, shares: sharesByExpense.get(e.id) ?? [] })
+    expensesByGroup.set(e.group_id, arr)
+  }
+  const settlementsByGroup = new Map<string, SettlementRecord[]>()
+  for (const s of settlementsRes.data ?? []) {
+    const arr = settlementsByGroup.get(s.group_id) ?? []
+    arr.push({ from: s.from_member, to: s.to_member, amount: s.amount })
+    settlementsByGroup.set(s.group_id, arr)
   }
 
-  return groups.map((g) => ({
-    slug: g.slug,
-    name: g.name,
-    kind: g.kind,
-    createdAt: g.created_at,
-    memberCount: memberCount.get(g.id) ?? 0,
-    total: totalByGroup.get(g.id) ?? 0,
-  }))
+  return groups.map((g) => {
+    const memberIds = membersByGroup.get(g.id) ?? []
+    const settlementRecords = settlementsByGroup.get(g.id) ?? []
+    // 진행도: 남은 송금(minimizeCashFlow) + 완료(보냈어요) = 전체. 데이터 불일치 시 생략(0)으로 안전.
+    let doneTransfers = 0
+    let totalTransfers = 0
+    try {
+      const pending = minimizeCashFlow(
+        netBalances(memberIds, expensesByGroup.get(g.id) ?? [], settlementRecords),
+      ).length
+      doneTransfers = settlementRecords.length
+      totalTransfers = doneTransfers + pending
+    } catch {
+      doneTransfers = 0
+      totalTransfers = 0
+    }
+    return {
+      slug: g.slug,
+      name: g.name,
+      kind: g.kind,
+      createdAt: g.created_at,
+      memberCount: memberIds.length,
+      total: totalByGroup.get(g.id) ?? 0,
+      doneTransfers,
+      totalTransfers,
+    }
+  })
 }
 
 /**

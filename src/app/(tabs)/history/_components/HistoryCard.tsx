@@ -14,13 +14,18 @@ export function HistoryCard({
   kind,
   metaLabel,
   totalLabel,
+  doneTransfers,
+  totalTransfers,
 }: {
   slug: string
   name: string
   kind: string
   metaLabel: string
   totalLabel: string
+  doneTransfers: number
+  totalTransfers: number
 }) {
+  const allDone = totalTransfers > 0 && doneTransfers >= totalTransfers
   const router = useRouter()
   const kept = kind === 'group'
   const [open, setOpen] = useState(false)
@@ -74,7 +79,25 @@ export function HistoryCard({
             {kept && <IcoBookmark className="h-3.5 w-3.5 shrink-0 text-brand" />}
             <span className="truncate">{name}</span>
           </p>
-          <p className="num mt-0.5 text-sm text-neutral-400">{metaLabel}</p>
+          <p className="num mt-0.5 text-sm text-neutral-400">
+            {metaLabel}
+            {totalTransfers > 0 && (
+              <>
+                {' · '}
+                <span
+                  className={
+                    allDone
+                      ? 'font-medium text-brand'
+                      : doneTransfers > 0
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-neutral-400'
+                  }
+                >
+                  {allDone ? '✓ 정산 완료' : `${doneTransfers}/${totalTransfers} 완료`}
+                </span>
+              </>
+            )}
+          </p>
         </div>
         <div className="num shrink-0 text-[15px] font-bold tracking-tight">{totalLabel}</div>
       </Link>
