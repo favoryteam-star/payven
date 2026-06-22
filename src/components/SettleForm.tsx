@@ -18,6 +18,7 @@ import { ModeChips, type SettleMode } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { AccountField, EMPTY_INLINE, NEW_ACCOUNT, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
+import { AbsorberGame } from '@/components/AbsorberGame'
 
 // 메뉴(항목) 1개. among = 멤버 길이의 참여 여부(기본 전원).
 export type RoundItem = { name: string; amount: number; among: boolean[] }
@@ -75,6 +76,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   // 반올림은 저장 안 됨(계산된 분담만 있음) → 수정도 '안 함'으로 시작, 필요하면 다시 고름(ADR-022).
   const [unit, setUnit] = useState(1) // 반올림 단위(1=안 함)
   const [absorberIndex, setAbsorberIndex] = useState<number | null>(null) // 남는 금액 받을 사람(members 인덱스)
+  const [gameOpen, setGameOpen] = useState(false) // '게임으로 정하기' 모달(돌림판/사다리)
   const [eventDate, setEventDate] = useState(initial?.eventDate ?? '') // 정산 날짜(YYYY-MM-DD). 비면 마운트 시 오늘로.
   // 1/N 전용
   const [amount, setAmount] = useState(initial?.amount ?? 0)
@@ -822,6 +824,27 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                   </button>
                 ))}
               </div>
+              {filledIdx.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setGameOpen(true)}
+                  className="mt-2.5 text-sm font-medium text-brand-700 underline-offset-2 hover:underline dark:text-brand"
+                >
+                  🎲 게임으로 정하기
+                </button>
+              )}
+              {gameOpen && (
+                <AbsorberGame
+                  candidates={filledIdx.map((fi) => ({ index: fi, name: members[fi].trim() }))}
+                  leftover={leftover}
+                  onPick={(idx) => {
+                    setAbsorberIndex(idx)
+                    setError(null)
+                    setErrorField(null)
+                  }}
+                  onClose={() => setGameOpen(false)}
+                />
+              )}
             </div>
           )}
         </section>
