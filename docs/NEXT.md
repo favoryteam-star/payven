@@ -169,7 +169,7 @@
 **즉시 할 일 순서:**
 1. ✅ `64a5028`·iOS 줌 수정 푸시·배포 완료.
 2. ✅ **폰 스모크(누적) 통과(2026-06-22, 사용자 "문제 없어")** — 내역 이름변경/보관·뒤로가기·진행도·구글/카카오 로그인·마이 계좌 CRUD·만들기 자동채움·웨이브2 신원/보냈어요·단위 반올림·수정/삭제 전부 정상. iOS 입력 포커스 줌도 수정 확인.
-3. ✅ **M6 레이트리밋 활성(2026-06-22, `95dc403`):** Vercel **Upstash for Redis 통합** 연결(Tokyo·Free·`KV_REST_API_URL/TOKEN` 자동 주입, payven Production+Preview) + **프로덕션 fail-fast 가드**(env 없으면 throw=fail-closed / dev는 graceful no-op, `KV_*`·`UPSTASH_REDIS_REST_*` 둘 다 인식). build·test 66·lint green + 일회용 가드 테스트(prod throw/dev no-op) + 배포 READY·라이브 200 확인. **남은 확인(폰 스모크): 라이브에서 정산 생성·보냈어요 정상 작동**(= env 제대로 주입됐다는 뜻, 미설정이면 즉시 에러).
+3. ✅ **M6 레이트리밋 활성(2026-06-22, `95dc403`):** Vercel **Upstash for Redis 통합** 연결(Tokyo·Free·`KV_REST_API_URL/TOKEN` 자동 주입, payven Production+Preview) + **프로덕션 fail-fast 가드**(env 없으면 throw=fail-closed / dev는 graceful no-op, `KV_*`·`UPSTASH_REDIS_REST_*` 둘 다 인식). build·test 66·lint green + 일회용 가드 테스트(prod throw/dev no-op) + 배포 READY·라이브 200. **✅ 라이브 정산 생성 폰 확인(2026-06-22)** — `정산하기`(레이트리밋 write) 성공·결과 보드 렌더 정상 = Upstash env 정상 주입, **레이트리밋 완전 검증 완료**(미설정이면 fail-closed라 에러 떴을 것).
 4. ▶ **남은 M6(완전공개 직전 한 세션, 응급 아님):** 키/토큰 롤(Supabase service_role + MCP 토큰 — 공개 유출 아님 확인됨, 완전공개 직전 1회) + **구글 프로덕션 게시**(consent screen Testing→In production; email/profile 기본 스코프라 별도 심사 없이 게시). cleanup은 제외(ADR-033).
 5. **앱 스토어 출시(사용자 결정: M6 후):** 라이브 사이트를 셸로 — 안드로이드 **TWA**(구글 OAuth 그대로 OK)부터 → iOS **Capacitor**(웹뷰서 구글 OAuth 막혀 시스템브라우저 처리 + 애플 4.2 심사 주의). (선택) 커스텀 도메인.
 6. (틈날 때) 문서 V2 전체 갱신(CLAUDE/PLAN/ARCHITECTURE가 V0 무로그인 기준 — 무거운 작업).
