@@ -31,6 +31,7 @@ export default async function EditSettlePage({ params }: Params) {
         members: g.members,
         payerIndex: g.payerIndex,
         amount: g.amount,
+        winnerIndex: g.winnerIndex,
         rounds: g.rounds,
         eventDate: g.eventDate,
         account: g.account,

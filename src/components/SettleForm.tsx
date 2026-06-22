@@ -35,6 +35,7 @@ export interface SettleFormInitial {
   members: string[]
   payerIndex: number
   amount: number
+  winnerIndex?: number | null // '한 명이 다 쏘기'면 그 사람(분담을 혼자 전액). 아니면 null/undefined.
   rounds: { payer: number; items: RoundItem[] }[]
   eventDate: string | null
   account: { bankName: string; accountNo: string; accountHolder: string } | null
@@ -55,7 +56,13 @@ function formatDateDisplay(ymd: string): string {
 }
 
 // 모드별 기본 제목. 정산결과는 이 기본값이면 제목 숨김(직접 바꾸면 표시).
-const TITLES: Record<SettleMode, string> = { quick: '빠른정산', items: '항목별 정산' }
+const TITLES: Record<SettleMode, string> = { quick: '빠른정산', items: '항목별 정산', shoot: '한 명이 쏘기' }
+
+// 쏘기('한 명이 다 쏘기') 진입 UI 두 가지를 폰에서 비교 중 — 별로인 걸 뺀다(사용자 결정).
+//  'mode'   = 별도 모드 칩(1/N · 항목별 · 쏘기)
+//  'toggle' = 1/N 안의 토글(똑같이 나누기 ↔ 한 명이 다 쏘기)
+// 두 진입 모두 같은 코어(진 사람만 전액 → 낸 사람에게)를 굴린다. 결정 후 한쪽 분기를 삭제.
+const SHOOT_PLACEMENT: 'mode' | 'toggle' = 'mode'
 
 // 인라인 계좌 상태로 변환(만들기=빈값, 수정=기존 계좌 시드).
 function inlineFrom(account: SettleFormInitial['account']): InlineAcct {
@@ -68,15 +75,21 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const router = useRouter()
   const isEdit = !!initial
   const editSlug = initial?.editSlug ?? ''
-  const [mode, setMode] = useState<SettleMode>(initial?.mode ?? 'quick')
+  // 수정 대상이 '쏘기'(winnerIndex 존재)면 진입 방식에 따라 모드/토글로 복원.
+  const initShoot = initial?.winnerIndex != null
+  const [mode, setMode] = useState<SettleMode>(
+    initShoot && SHOOT_PLACEMENT === 'mode' ? 'shoot' : (initial?.mode ?? 'quick'),
+  )
+  const [shootOn, setShootOn] = useState(initShoot && SHOOT_PLACEMENT === 'toggle') // 1/N 안 '쏘기' 토글(placement B)
   // 공유 입력
   const [title, setTitle] = useState<string>(initial?.title ?? TITLES.quick) // 정산 제목(기본=모드명, 수정 가능)
   const [members, setMembers] = useState<string[]>(initial?.members ?? ['나', ''])
   const [payerIndex, setPayerIndex] = useState(initial?.payerIndex ?? 0)
+  const [winnerIndex, setWinnerIndex] = useState<number | null>(initial?.winnerIndex ?? null) // 다 쏠 사람(members 인덱스)
   // 반올림은 저장 안 됨(계산된 분담만 있음) → 수정도 '안 함'으로 시작, 필요하면 다시 고름(ADR-022).
   const [unit, setUnit] = useState(1) // 반올림 단위(1=안 함)
   const [absorberIndex, setAbsorberIndex] = useState<number | null>(null) // 남는 금액 받을 사람(members 인덱스)
-  const [gameOpen, setGameOpen] = useState(false) // '게임으로 정하기' 모달(돌림판/사다리)
+  const [gameOpen, setGameOpen] = useState(false) // '게임으로 정하기' 모달(돌림판/사다리, 흡수자·쏘기 공용)
   const [eventDate, setEventDate] = useState(initial?.eventDate ?? '') // 정산 날짜(YYYY-MM-DD). 비면 마운트 시 오늘로.
   // 1/N 전용
   const [amount, setAmount] = useState(initial?.amount ?? 0)
@@ -150,11 +163,13 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     sessionStorage.removeItem('payven:draft:create')
     try {
       const d = JSON.parse(raw)
-      if (d.mode === 'quick' || d.mode === 'items') setMode(d.mode)
+      if (d.mode === 'quick' || d.mode === 'items' || d.mode === 'shoot') setMode(d.mode)
+      if (typeof d.shootOn === 'boolean') setShootOn(d.shootOn)
       if (typeof d.title === 'string') setTitle(d.title)
       if (typeof d.amount === 'number') setAmount(d.amount)
       if (Array.isArray(d.members)) setMembers(d.members)
       if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
+      if (typeof d.winnerIndex === 'number') setWinnerIndex(d.winnerIndex)
       if (typeof d.unit === 'number') setUnit(d.unit)
       if (typeof d.absorberIndex === 'number') setAbsorberIndex(d.absorberIndex)
       if (typeof d.eventDate === 'string') setEventDate(d.eventDate)
@@ -186,7 +201,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const goLogin = (provider: 'kakao' | 'google') => {
     sessionStorage.setItem(
       'payven:draft:create',
-      JSON.stringify({ mode, title, amount, members, payerIndex, unit, absorberIndex, eventDate, rounds, acct }),
+      JSON.stringify({ mode, shootOn, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct }),
     )
     window.location.href = `/auth/login?provider=${provider}&next=${encodeURIComponent('/?resume=1')}`
   }
@@ -197,6 +212,12 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   // 결제자가 비워졌거나 범위를 벗어나면 첫 채워진 멤버로 — 표시·계산·제출의 단일 출처.
   const effectivePayer = filledIdx.includes(payerIndex) ? payerIndex : (filledIdx[0] ?? 0)
   const effRoundPayer = (rd: Round) => (filledIdx.includes(rd.payer) ? rd.payer : (filledIdx[0] ?? 0))
+  // 쏘기 = 진입 방식에 따라 별도 모드 또는 1/N 안 토글. 둘 다 1/N과 같은 입력(금액·멤버·낸 사람)을 공유.
+  const isShoot = SHOOT_PLACEMENT === 'mode' ? mode === 'shoot' : mode === 'quick' && shootOn
+  // 1/N처럼 금액 한 칸을 쓰는 모드(쏘기 포함) — 항목별만 차수 묶음.
+  const isAmountMode = mode === 'quick' || mode === 'shoot'
+  // 다 쏠 사람: 명시 선택이 유효하면 그 사람, 아니면 null(미선택 → 제출 막힘).
+  const effectiveWinner = winnerIndex !== null && filledIdx.includes(winnerIndex) ? winnerIndex : null
   // 최근 참여자 빠른 추가: 이미 들어간 이름은 제외.
   const currentNames = new Set(members.map((m) => m.trim()).filter(Boolean))
   const memberSuggestions = recentNames.filter((n) => !currentNames.has(n)).slice(0, 8)
@@ -234,7 +255,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
   // 모드 공통: 남는 금액 + 단위 섹션 노출 여부.
   const leftover = mode === 'quick' ? quickLeftover : itemsLeftover
-  const showUnit = mode === 'quick' ? perPerson > 0 : filledIdx.length >= 2 && total > 0
+  // 쏘기는 한 명이 전액이라 단위/흡수자 개념 없음 → 섹션 숨김(흡수자 게임도 함께 숨음).
+  const showUnit = isShoot ? false : mode === 'quick' ? perPerson > 0 : filledIdx.length >= 2 && total > 0
 
   const allAmong = () => members.map(() => true)
 
@@ -268,6 +290,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     )
     setPayerIndex((p) => (p === i ? 0 : p > i ? p - 1 : p))
     setAbsorberIndex((p) => (p === null ? null : p === i ? null : p > i ? p - 1 : p))
+    setWinnerIndex((p) => (p === null ? null : p === i ? null : p > i ? p - 1 : p))
   }
   const onMemberKeyDown = (e: KeyboardEvent<HTMLInputElement>, i: number) => {
     if (e.key !== 'Enter') return
@@ -339,9 +362,11 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
   // 모드 전환. 제목 따라가기 + 항목별 첫 진입이면 차수 1개 자동 생성(메뉴 펼친 채 바로 입력하게).
   const switchMode = (m: SettleMode) => {
-    setTitle((t) => (t.trim() === '' || t === TITLES.quick || t === TITLES.items ? TITLES[m] : t))
+    const isDefaultTitle = Object.values(TITLES).includes(title.trim())
+    setTitle((t) => (t.trim() === '' || isDefaultTitle ? TITLES[m] : t))
     if (m === 'items')
       setRounds((p) => (p.length ? p : [{ payer: 0, split: true, items: [{ name: '', amount: 0, among: allAmong() }] }]))
+    setGameOpen(false)
     setMode(m)
   }
 
@@ -362,8 +387,9 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
 
     // 모드별 메인 입력 검증 + 항목별 payload(차수→메뉴) 구성
     const payload: { payerIndex: number; items: { description?: string; amount: number; participants: number[] }[] }[] = []
-    if (mode === 'quick') {
+    if (isAmountMode) {
       if (amount <= 0) return fail('amount', '금액을 입력해 주세요')
+      if (isShoot && effectiveWinner === null) return fail('winner', '누가 다 쏠지 골라 주세요')
     } else {
       for (const rd of rounds) {
         const realItems = rd.items.filter((it) => it.amount > 0)
@@ -383,11 +409,13 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       if (payload.length === 0) return fail('rounds', '금액이 있는 자리를 1개 이상 넣어 주세요')
     }
 
-    const payer = Math.max(0, filledIdx.indexOf(effectivePayer)) // 1/N 낸 사람
+    const payer = Math.max(0, filledIdx.indexOf(effectivePayer)) // 1/N·쏘기 낸 사람
+    // 쏘기: 다 쏠 사람(filled 위치). 있으면 서버가 단일 승자 분담으로(unit/absorber 무시).
+    const winner = isShoot && effectiveWinner !== null ? Math.max(0, filledIdx.indexOf(effectiveWinner)) : undefined
     // 안 나눠떨어지면(단위 무관, 안 함의 1~2원 포함) 남는 금액 받을 사람을 골라야. filled 위치로 변환.
     let absorberIdx: number | undefined
     // 흡수자 = 명시 선택 없으면 낸 사람(effectiveAbsorber)이 기본 — 강제 탭 없음. 항상 유효한 채워진 멤버.
-    if (leftover > 0) absorberIdx = Math.max(0, filledIdx.indexOf(effectiveAbsorber))
+    if (!isShoot && leftover > 0) absorberIdx = Math.max(0, filledIdx.indexOf(effectiveAbsorber))
 
     const resolved = resolveAccount(accounts, accountId, acct)
     if (resolved.error) return fail('account', resolved.error)
@@ -405,11 +433,11 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
           saveAccount: resolved.saveAccount,
         }
         const res = isEdit
-          ? mode === 'quick'
-            ? await updateQuickSettleAction({ slug: editSlug, amount, payerIndex: payer, ...common })
+          ? isAmountMode
+            ? await updateQuickSettleAction({ slug: editSlug, amount, payerIndex: payer, winnerIndex: winner, ...common })
             : await updateItemizedBillAction({ slug: editSlug, rounds: payload, ...common })
-          : mode === 'quick'
-            ? await quickSettleAction({ amount, payerIndex: payer, ...common })
+          : isAmountMode
+            ? await quickSettleAction({ amount, payerIndex: payer, winnerIndex: winner, ...common })
             : await addItemizedBillAction({ rounds: payload, ...common })
         if ('needLogin' in res) {
           // 만들기 = 안내 시트(입력값 보존). 수정 = 세션 만료 → 로그인 후 수정 화면으로 복귀.
@@ -501,7 +529,12 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         </div>
       )}
 
-      <ModeChips value={mode} onChange={switchMode} className="mb-4" />
+      <ModeChips
+        value={mode}
+        onChange={switchMode}
+        modes={SHOOT_PLACEMENT === 'mode' ? ['quick', 'items', 'shoot'] : ['quick', 'items']}
+        className="mb-4"
+      />
 
       {/* 제목 (공유) — 기본=모드명, 수정 가능. 기본값 그대로면 정산결과에서 제목 숨김. */}
       <section className="mb-5">
@@ -516,8 +549,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         />
       </section>
 
-      {/* 맨 위 입력 — 1/N은 금액, 항목별은 차수 묶음 */}
-      {mode === 'quick' ? (
+      {/* 맨 위 입력 — 1/N·쏘기는 금액 한 칸, 항목별은 차수 묶음 */}
+      {isAmountMode ? (
         <button
           ref={refFor('main')}
           onClick={() => setPadOpen(true)}
@@ -715,10 +748,10 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         {errorField === 'members' && error && <p className="mt-2 text-sm text-red-500">{error}</p>}
       </section>
 
-      {/* 낸 사람 — 1/N만(항목별은 차수마다 '낸 사람'을 따로 고름). */}
-      {mode === 'quick' && filledIdx.length >= 1 && (
+      {/* 낸 사람 — 1/N·쏘기(항목별은 차수마다 '낸 사람'을 따로 고름). 쏘기는 먼저 결제한 사람(진 사람이 갚을 대상). */}
+      {isAmountMode && filledIdx.length >= 1 && (
         <section className="mb-5">
-          <p className="mb-2 text-sm font-medium text-neutral-500">누가 냈어요?</p>
+          <p className="mb-2 text-sm font-medium text-neutral-500">{isShoot ? '누가 먼저 냈어요?' : '누가 냈어요?'}</p>
           <div className="flex flex-wrap gap-2" role="group" aria-label="낸 사람">
             {filledIdx.map((i) => (
               <button
@@ -736,6 +769,113 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
               </button>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* 쏘기 진입(placement B) — 1/N 안에서 '똑같이 나누기 ↔ 한 명이 다 쏘기' 토글 */}
+      {SHOOT_PLACEMENT === 'toggle' && mode === 'quick' && filledIdx.length >= 1 && (
+        <section className="mb-5">
+          <p className="mb-2 text-sm font-medium text-neutral-500">어떻게 나눠요?</p>
+          <div className="flex gap-2">
+            {[
+              { on: false, label: '똑같이 나누기' },
+              { on: true, label: '🎲 한 명이 다 쏘기' },
+            ].map((o) => (
+              <button
+                key={o.label}
+                type="button"
+                onClick={() => {
+                  setShootOn(o.on)
+                  setGameOpen(false)
+                }}
+                aria-pressed={shootOn === o.on}
+                className={
+                  'flex-1 rounded-xl py-2.5 text-sm font-medium transition ' +
+                  (shootOn === o.on
+                    ? 'bg-brand text-white'
+                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                }
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 쏘기: 누가 다 쏠지 — 멤버 칩(직접) 또는 게임. 한 명이 전액 부담 → 낸 사람에게 송금. */}
+      {isShoot && filledIdx.length >= 1 && (
+        <section ref={refFor('winner')} className="mb-5">
+          <p className="mb-2 text-sm font-medium text-neutral-500">누가 다 쏠까요?</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="다 쏠 사람">
+            {filledIdx.map((fi) => (
+              <button
+                key={fi}
+                onClick={() => {
+                  setWinnerIndex(fi)
+                  setError(null)
+                  setErrorField(null)
+                }}
+                aria-pressed={effectiveWinner === fi}
+                className={
+                  'rounded-full px-4 py-2.5 text-sm font-medium transition active:scale-95 ' +
+                  (effectiveWinner === fi
+                    ? 'bg-brand text-white'
+                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
+                }
+              >
+                {members[fi].trim()}
+              </button>
+            ))}
+          </div>
+          {filledIdx.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setGameOpen(true)}
+              className="mt-2.5 text-sm font-medium text-brand-700 underline-offset-2 hover:underline dark:text-brand"
+            >
+              🎲 게임으로 정하기
+            </button>
+          )}
+          {gameOpen && (
+            <AbsorberGame
+              candidates={filledIdx.map((fi) => ({ index: fi, name: members[fi].trim() }))}
+              prompt={
+                <>
+                  {amount > 0 ? (
+                    <span className="num font-semibold text-brand-700 dark:text-brand">{formatWon(amount)}</span>
+                  ) : (
+                    '전액'
+                  )}{' '}
+                  누가 다 쏠지! 💸
+                </>
+              }
+              onPick={(idx) => {
+                setWinnerIndex(idx)
+                setError(null)
+                setErrorField(null)
+              }}
+              onClose={() => setGameOpen(false)}
+            />
+          )}
+          {/* 결과 미리보기 — 진 사람=낸 사람이면 정산할 게 없음. */}
+          {effectiveWinner !== null && amount > 0 && (
+            <p className="mt-3 rounded-2xl bg-brand-50 px-4 py-3 text-sm dark:bg-brand-600/15">
+              {effectiveWinner === effectivePayer ? (
+                <>
+                  <span className="font-semibold text-brand-700 dark:text-brand">{members[effectiveWinner].trim()}</span>
+                  님이 다 쏴요 — 본인이 냈으니 정산할 게 없어요.
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-brand-700 dark:text-brand">{members[effectiveWinner].trim()}</span>
+                  님이 <span className="num font-semibold">{formatWon(amount)}</span> 다 쏴요 →{' '}
+                  {members[effectivePayer].trim()}님에게 보내요.
+                </>
+              )}
+            </p>
+          )}
+          {errorField === 'winner' && error && <p className="mt-2 text-sm text-red-500">{error}</p>}
         </section>
       )}
 
@@ -850,16 +990,19 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         </section>
       )}
 
-      {/* 미리보기 — 돈 관련 입력(금액·참여·낸 사람·단위) 바로 뒤, 날짜·계좌 앞에서 결과 먼저 확인. */}
-      {mode === 'quick'
-        ? perPerson > 0 &&
+      {/* 미리보기 — 돈 관련 입력(금액·참여·낸 사람·단위) 바로 뒤, 날짜·계좌 앞에서 결과 먼저 확인.
+          쏘기는 위 picker에 결과 미리보기가 따로 있어 여기선 숨김. */}
+      {!isShoot &&
+        (mode === 'quick' ? (
+          perPerson > 0 &&
           leftover === 0 && (
             <div className="mb-5 rounded-2xl bg-brand-50 px-4 py-3 text-center dark:bg-brand-600/15">
               <span className="text-sm text-neutral-500">1인당 </span>
               <span className="num text-lg font-bold text-brand-700 dark:text-brand">{formatWon(quickBase)}</span>
             </div>
           )
-        : total > 0 && (
+        ) : (
+          total > 0 && (
             <section className="mb-5 rounded-2xl bg-brand-50 px-4 py-3 dark:bg-brand-600/15">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-medium text-neutral-500">합계</span>
@@ -876,7 +1019,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                 </div>
               )}
             </section>
-          )}
+          )
+        ))}
 
       {/* 받을 계좌 (공유). 저장계좌 있으면 칩+'새 계좌', 없으면 인라인 입력(선택). */}
       {accounts !== null && (

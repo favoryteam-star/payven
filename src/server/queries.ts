@@ -77,6 +77,36 @@ async function setEventDate(slug: string, eventDate: string | undefined): Promis
 }
 
 /** 빠른정산: 임시그룹+멤버+지출+분담을 RPC로 원자적 생성. 분담은 도메인에서 계산. ownerId=로그인 사용자. */
+/** 빠른정산 분담 배열(멤버 순서, 길이=멤버수). winnerIndex 있으면 '한 명이 다 쏘기'(그 사람만 전액,
+ *  나머지 0 — unit/absorber 무시). 없으면 균등 분할(단위·흡수자 옵션). 반올림 단일 출처=equalSplit. */
+function quickSharesArray(input: {
+  amount: number
+  members: string[]
+  payerIndex: number
+  unit: number
+  absorberIndex?: number
+  winnerIndex?: number
+}): number[] {
+  if (input.winnerIndex !== undefined) {
+    // 단일 참여자(진 사람) 분할 = 그 사람이 전액. 도메인을 거쳐 정수 불변식 유지(나머지 멤버는 0).
+    const won = equalSplit(input.amount, [String(input.winnerIndex)], { paidBy: String(input.payerIndex) })
+    const arr = Array.from({ length: input.members.length }, () => 0)
+    for (const s of won) arr[Number(s.memberId)] = s.amount
+    return arr
+  }
+  // 멤버 순서를 인덱스 id로 써서 equalSplit → 반환 순서 = 멤버 순서
+  const shares = equalSplit(
+    input.amount,
+    input.members.map((_, i) => String(i)),
+    {
+      paidBy: String(input.payerIndex),
+      unit: input.unit,
+      absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
+    },
+  )
+  return shares.map((s) => s.amount)
+}
+
 export async function createQuickSettle(
   input: QuickSettleInput,
   ownerId: string,
@@ -84,14 +114,7 @@ export async function createQuickSettle(
   const supa = getAdminClient()
   const slug = nanoid(21)
 
-  // 멤버 순서를 인덱스 id로 써서 equalSplit → 반환 순서 = 멤버 순서
-  const indexIds = input.members.map((_, i) => String(i))
-  const shares = equalSplit(input.amount, indexIds, {
-    paidBy: String(input.payerIndex),
-    unit: input.unit,
-    absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
-  })
-  const sharesArr = shares.map((s) => s.amount)
+  const sharesArr = quickSharesArray(input)
 
   const { error } = await supa.rpc('create_quick_settle', {
     p_slug: slug,
@@ -188,13 +211,7 @@ export async function updateQuickSettle(
   ownerId: string,
 ): Promise<{ slug: string }> {
   const supa = getAdminClient()
-  const indexIds = input.members.map((_, i) => String(i))
-  const shares = equalSplit(input.amount, indexIds, {
-    paidBy: String(input.payerIndex),
-    unit: input.unit,
-    absorber: input.absorberIndex !== undefined ? String(input.absorberIndex) : undefined,
-  })
-  const sharesArr = shares.map((s) => s.amount)
+  const sharesArr = quickSharesArray(input)
 
   const { error } = await supa.rpc('update_quick_settle', {
     p_slug: input.slug,
@@ -413,6 +430,7 @@ export interface EditableGroup {
   members: string[]
   payerIndex: number // quick 낸 사람
   amount: number // quick=단일 지출 금액. items=0(차수로 표현).
+  winnerIndex: number | null // '한 명이 다 쏘기'면 그 사람(분담을 혼자 전액). 아니면 null.
   rounds: EditableRound[] // items 모드의 차수 묶음
   account: { bankName: string; accountNo: string; accountHolder: string } | null
   hasSettlements: boolean // '보냈어요' 기록 존재 → 수정 시 초기화 경고.
@@ -449,8 +467,8 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
   // 지출별 참여 멤버(분담 행이 있는 멤버) 집합 — 항목별 among 복원용.
   const expenseIds = expenses.map((e) => e.id)
   const sharesRes = expenseIds.length
-    ? await supa.from('expense_shares').select('expense_id, member_id').in('expense_id', expenseIds)
-    : { data: [] as { expense_id: string; member_id: string }[] }
+    ? await supa.from('expense_shares').select('expense_id, member_id, amount').in('expense_id', expenseIds)
+    : { data: [] as { expense_id: string; member_id: string; amount: number }[] }
   const partsByExpense = new Map<string, Set<string>>()
   for (const s of sharesRes.data ?? []) {
     const set = partsByExpense.get(s.expense_id) ?? new Set<string>()
@@ -462,6 +480,7 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
   const payerIndex = expenses.length ? Math.max(0, memberIds.indexOf(expenses[0].paid_by)) : 0
 
   let amount = 0
+  let winnerIndex: number | null = null
   let rounds: EditableRound[] = []
   if (isItemized) {
     // 차수 재구성: (bill_id, paid_by)로 묶음(같은 자리 = 같은 bill_id + 같은 결제자). 첫 등장 순서 유지.
@@ -487,6 +506,18 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
     rounds = order.map((k) => byKey.get(k)!)
   } else {
     amount = expenses.length ? expenses[0].amount : 0
+    // 쏘기 감지: 분담이 한 명에게만 전액(나머지 0)이면 그 사람이 '다 쏜' 것 → winnerIndex 복원
+    // (안 그러면 수정 시 1/N으로 변질). 비참여 멤버도 0 분담 행이 저장돼 금액으로 판정.
+    // 휴리스틱 안전성: 단위 반올림된 극소액 1/N(amount < 인원·단위, 예: 3,000원 미만 천원단위)도
+    //   '한 명만 전액'으로 보일 수 있으나, 그 한 명=흡수자라 쏘기로 복원→재저장해도 분담이 동일(무해).
+    //   완전 구별은 플래그 저장(스키마 변경)이 필요해 V0에선 이 무해 휴리스틱 채택('winner!=payer' 가드는
+    //   오히려 진짜 자기-쏘기를 1/N으로 변질시켜 역효과 — 적용 안 함).
+    if (expenses.length) {
+      const nz = (sharesRes.data ?? []).filter((s) => s.expense_id === expenses[0].id && s.amount > 0)
+      if (nz.length === 1 && nz[0].amount === amount) {
+        winnerIndex = Math.max(0, memberIds.indexOf(nz[0].member_id))
+      }
+    }
   }
 
   // 계좌는 항상 멤버 0(나). 세 필드 다 있을 때만.
@@ -505,6 +536,7 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
     members: members.map((m) => m.name),
     payerIndex,
     amount,
+    winnerIndex,
     rounds,
     account,
     hasSettlements: (settlementsRes.data ?? []).length > 0,

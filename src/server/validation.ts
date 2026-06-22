@@ -52,7 +52,7 @@ const slugSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{10,40}$/, '잘못된 
 
 // 멤버 인덱스 범위 검증(낸 사람·남는 금액 받을 사람). 빠른정산·항목별·수정 공용.
 function refineMemberBounds(
-  val: { members: string[]; payerIndex: number; absorberIndex?: number | undefined },
+  val: { members: string[]; payerIndex: number; absorberIndex?: number | undefined; winnerIndex?: number | undefined },
   ctx: z.RefinementCtx,
 ): void {
   const n = val.members.length
@@ -61,6 +61,9 @@ function refineMemberBounds(
   }
   if (val.absorberIndex !== undefined && val.absorberIndex >= n) {
     ctx.addIssue({ code: 'custom', message: '남는 금액 받을 사람이 범위를 벗어났습니다', path: ['absorberIndex'] })
+  }
+  if (val.winnerIndex !== undefined && val.winnerIndex >= n) {
+    ctx.addIssue({ code: 'custom', message: '쏠 사람이 범위를 벗어났습니다', path: ['winnerIndex'] })
   }
 }
 
@@ -109,6 +112,8 @@ const quickSettleObject = z.object({
   // 반올림 단위 + 남는 금액 받을 사람(멤버 인덱스). unit>1인데 absorber 없으면 도메인이 자동 분배.
   unit: roundUnitSchema,
   absorberIndex: z.number().int().min(0).optional(),
+  // '한 명이 다 쏘기': 이 사람만 전액 부담(나머지 0). 있으면 서버가 단일 승자 분담으로(unit/absorber 무시).
+  winnerIndex: z.number().int().min(0).optional(),
   eventDate: eventDateSchema,
   account: accountFieldsSchema.optional(),
   // 인라인으로 직접 입력한 계좌면 정산 시 내 저장 계좌에 추가(저장 계좌에서 고른 거면 false).

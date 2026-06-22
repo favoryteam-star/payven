@@ -1,17 +1,20 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { formatWon } from '@/domain/money'
 
-// 남은 금액(잔돈) 낼 사람을 게임으로 공정하게 정하는 모달. 돌림판/사다리 탭.
-// 결과(흡수자 = members 인덱스)만 onPick으로 돌려주고, 금액 계산은 기존 도메인이 그대로 함.
+// 후보 중 한 명을 게임으로 공정하게 정하는 범용 모달. 돌림판/사다리 탭.
+// 쓰임: ①잔돈 흡수자(남은 N원 누가 낼지) ②쏘기(누가 다 쏠지). 결과(= members 인덱스)만 onPick으로
+// 돌려주고 금액 계산은 기존 도메인이 그대로 함. prompt로 부제만 바꿔 재사용.
 // 공정성: crypto 균등 추첨(Math.random 금지). 접근성: prefers-reduced-motion이면 애니메이션 생략.
 
 export type GameCandidate = { index: number; name: string }
 
 type Props = {
   candidates: GameCandidate[]
-  leftover: number
+  // 부제(누구를 왜 뽑는지). 없으면 leftover로 잔돈 흡수자 기본 문구.
+  prompt?: ReactNode
+  leftover?: number
   onPick: (memberIndex: number) => void
   onClose: () => void
 }
@@ -39,7 +42,7 @@ function short(name: string, max: number): string {
 
 const SEG_COLORS = ['#14B488', '#0FA177', '#0B7E5E', '#119C7C']
 
-export function AbsorberGame({ candidates, leftover, onPick, onClose }: Props) {
+export function AbsorberGame({ candidates, prompt, leftover, onPick, onClose }: Props) {
   const [tab, setTab] = useState<'wheel' | 'ladder'>('wheel')
   const [winner, setWinner] = useState<GameCandidate | null>(null)
 
@@ -73,7 +76,12 @@ export function AbsorberGame({ candidates, leftover, onPick, onClose }: Props) {
           </button>
         </div>
         <p className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">
-          남은 <span className="num font-semibold text-brand-700 dark:text-brand">{formatWon(leftover)}</span> 누가 낼지!
+          {prompt ?? (
+            <>
+              남은 <span className="num font-semibold text-brand-700 dark:text-brand">{formatWon(leftover ?? 0)}</span> 누가
+              낼지!
+            </>
+          )}
         </p>
 
         {/* 탭 */}

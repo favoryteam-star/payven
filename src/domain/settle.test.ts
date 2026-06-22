@@ -66,6 +66,30 @@ describe('equalSplit', () => {
   })
 })
 
+// '한 명이 다 쏘기' = 진 사람만 참여자로 둔 분할(서버 quickSharesArray). 도메인 변경 0으로 표현.
+describe('한 명이 다 쏘기(단일 승자 정산)', () => {
+  it('단일 참여자는 전액을 부담', () => {
+    expect(equalSplit(30000, ['2'], { paidBy: '0' })).toEqual([{ memberId: '2', amount: 30000 }])
+  })
+
+  it('진 사람 ≠ 낸 사람 → 진 사람이 낸 사람에게 전액', () => {
+    // 낸 사람 0이 30000 결제, 진 사람 2가 전액 부담(나머지 0 분담).
+    const expenses: ExpenseRecord[] = [{ amount: 30000, paidBy: '0', shares: [{ memberId: '2', amount: 30000 }] }]
+    const net = netBalances(['0', '1', '2'], expenses)
+    expect(net.get('0')).toBe(30000) // 낸 사람 = 받을 돈
+    expect(net.get('1')).toBe(0) // 안 낀 사람
+    expect(net.get('2')).toBe(-30000) // 진 사람 = 갚을 돈
+    expect(minimizeCashFlow(net)).toEqual([{ from: '2', to: '0', amount: 30000 }])
+  })
+
+  it('진 사람 = 낸 사람 → 정산할 게 없음(딱 맞춤)', () => {
+    const expenses: ExpenseRecord[] = [{ amount: 30000, paidBy: '0', shares: [{ memberId: '0', amount: 30000 }] }]
+    const net = netBalances(['0', '1', '2'], expenses)
+    expect([...net.values()].every((v) => v === 0)).toBe(true)
+    expect(minimizeCashFlow(net)).toEqual([])
+  })
+})
+
 describe('splitByWeights', () => {
   const w = (memberId: MemberId, weight: number): Weight => ({ memberId, weight })
 
