@@ -4,7 +4,8 @@ import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
 // 무로그인이라 모든 공개 write 액션은 이 래퍼로 감싼다(CLAUDE.md 하드룰 6).
-// Upstash 미설정(개발/M3 전)이면 graceful no-op + 경고. 설정되면 IP 슬라이딩 윈도우로 강제.
+// Upstash 미설정이면 개발에선 graceful no-op + 경고, 프로덕션에선 fail-closed로 throw
+// (공개 write가 무방비로 열리는 배포 실수 방지). 설정되면 IP 슬라이딩 윈도우로 강제.
 
 const DEFAULT_LIMIT = 10
 const DEFAULT_WINDOW_SEC = 10
@@ -14,11 +15,20 @@ let warned = false
 
 function getRatelimit(): Ratelimit | null {
   if (ratelimit !== undefined) return ratelimit
-  const url = process.env.UPSTASH_REDIS_REST_URL
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN
+  // Vercel의 Upstash 통합은 KV_REST_API_URL/TOKEN으로 주입(REST 주소+토큰).
+  // 수동 설정(.env.example)은 UPSTASH_REDIS_REST_* — 둘 다 받는다.
+  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
   if (!url || !token) {
+    // 프로덕션에서 미설정 = 배포 실수. 무로그인 공개 write가 무방비로 열리므로 fail-closed.
+    // (요청 시점에 던져 빌드는 안 깨지고, 배포 직후 첫 write에서 바로 드러남.)
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[ratelimit] Upstash env(KV_REST_API_URL/TOKEN 또는 UPSTASH_REDIS_REST_*) 미설정 — 프로덕션에선 레이트리밋이 필수입니다. Vercel 환경변수(Production·Preview)에 추가하세요.',
+      )
+    }
     if (!warned) {
-      console.warn('[ratelimit] Upstash 미설정 — 레이트리밋 비활성(개발). 프로덕션 전 설정 필요(M3).')
+      console.warn('[ratelimit] Upstash 미설정 — 레이트리밋 비활성(개발 전용).')
       warned = true
     }
     ratelimit = null
