@@ -6,14 +6,14 @@ export const metadata: Metadata = {
   // og:image 등 상대경로를 절대 URL로 — 카카오/슬랙 등 스크래퍼가 정확히 가져가게.
   metadataBase: new URL('https://payven.kr'),
   title: '페이븐 — 1초 정산',
-  description: '무로그인으로 바로 더치페이. 술값·밥값, 계산기 대신 페이븐.',
+  description: '링크로 끝내는 더치페이. 술값·밥값, 계산기 대신 페이븐.',
   // 공유 링크 미리보기(OG). 정산 페이지는 generateMetadata가 제목·설명을 덮어씀.
   openGraph: {
     type: 'website',
     siteName: '페이븐',
     locale: 'ko_KR',
     title: '페이븐 — 1초 정산',
-    description: '무로그인으로 바로 더치페이. 술값·밥값, 계산기 대신 페이븐.',
+    description: '링크로 끝내는 더치페이. 술값·밥값, 계산기 대신 페이븐.',
     images: ['/og.png'],
   },
   twitter: { card: 'summary_large_image' },
