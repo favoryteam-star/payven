@@ -310,7 +310,12 @@ function Ladder({ candidates, onResult }: { candidates: GameCandidate[]; onResul
     window.setTimeout(() => onResult(candidates[game.winStart]), reduce ? 60 : 2400)
   }
 
-  const winPath = game.paths[game.winStart].map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
+  // 💸(당첨 칸·아래)에서 이름(위)으로 거꾸로 그린다 — 시작점이 당첨자 이름이면 스포일러라,
+  // 아래에서 올라가며 마지막에 누구인지 드러나게(진짜 사다리타기의 긴장감).
+  const winPath = [...game.paths[game.winStart]]
+    .reverse()
+    .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`)
+    .join(' ')
 
   return (
     <>
