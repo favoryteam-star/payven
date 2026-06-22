@@ -46,7 +46,8 @@
 - 서버 전용 Supabase Auth(`@supabase/ssr`, anon 키 **서버 전용**·httpOnly 쿠키 → 브라우저 Supabase 키 0개). `src/server/auth.ts`(`getAuthUser` graceful) + `/auth/login·callback·logout` + `src/middleware.ts`(세션 갱신·`/auth/` SW우회·`?code`→`/auth/callback` 안전망). **카카오 로그인 라이브 확인**(나희진, 닉네임+이메일 수집). 마이탭 로그인/로그아웃·프로필.
 - **만들기 로그인 게이트(보기는 무로그인)**: 액션이 세션 검증 → 미로그인이면 `needLogin` → 클라가 **안내 시트(`LoginSheet`)** "카카오로 계속하기" → 입력값 sessionStorage 보존 → 카카오 → `?resume=1` 복원 + **자동 제출**(두 번 안 누름) → 정산. `owner_id` 부여(0004 컬럼·0005 RPC, 실DB 검증).
 - 카카오 앱 `1491200`(비즈앱): 동의 닉네임/프사=선택·**이메일=필수**(+"값 없으면 입력 요청"). Supabase Kakao **"Allow users without email" ON**. Site URL은 프로덕션 권장(미들웨어 `?code` 안전망이 폴백 커버).
-- **남음(M4 잔여)**: 구글 로그인(같은 패턴 — Google Cloud OAuth 클라 + 인앱웹뷰 폴백) · 익명 게스트→`linkIdentity`.
+- **✅ 구글 로그인 완료(코드, 2026-06-22, ADR-029):** 서버 라우트는 이미 `provider=google` 허용 → 클라 진입점 6곳에 구글 추가. 공용 `LoginButtons`(카카오/구글, `next`=앵커·`onSelect`=버튼) · `/auth` 선택 페이지(noindex) · 수정 재인증 게이트는 `/auth?next=`로(provider 강제 해제) · 인앱 웹뷰 안내(`lib/ua.ts`) · **🔐 next 오픈 리다이렉트 하드닝**(`lib/safeNextPath`, callback/login route) · 마이 탭 출처 라벨 `app_metadata.provider` 동적화. test 66·lint·build green, 프리뷰 e2e. **잔여(외부 설정+폰 스모크):** Google Cloud OAuth 클라(웹) → 리디렉션 URI `https://gtssqmibfhkyffvrkhzy.supabase.co/auth/v1/callback` → Supabase Providers→Google 활성(Client ID/Secret). 설정 후 구글 OAuth 왕복 폰 스모크.
+- **남음(M4 잔여)**: 익명 게스트→`linkIdentity`(선택).
 
 ## ✅ 작업 3 — 받는 사람 저장 계좌 + 예금주 + 토스 버튼 연결 (완료 2026-06-20)
 택배주소처럼 **내 받을 계좌(은행/계좌번호/예금주)를 로그인 계정에 저장 → 만들기 때 자동 채움**. 상세 근거 [[DECISIONS#ADR-013]].
@@ -165,8 +166,8 @@
 ## ▶ 다음 세션 시작점 = 폰 스모크 누적분 → 구글 로그인 또는 그룹 지속
 웨이브2까지 **라이브 가능 상태**(배포 후). OAuth·실기기 의존이라 자동검증 불가했던 **누적 폰 스모크**를 먼저 정리하는 걸 권장, 그다음 새 기능.
 - **① 폰 스모크(미완, 누적):** 카카오 로그인 후 ⓐ마이 계좌 CRUD·만들기 자동채움(인라인 첫 저장→칩) ⓑ내역탭 내 정산 목록 렌더 ⓒ웨이브2 신원/보냈어요/취소 + 주최자 관리 모드 ⓓ**단위 반올림 정산 생성→정산결과 금액**(흡수자만 다르고 나머지 깔끔한지) ⓔ**내역 수정/삭제 UI**(⋯ 메뉴→수정 프리필 정확→교체 저장→정산결과 반영 / 삭제 확인→목록에서 사라짐, 보냈어요 있던 정산 수정 시 경고 배너). (코드 신뢰는 높음 — 프리뷰 e2e + 도메인 58테스트 통과. 실기기는 토스 앱·localStorage·OAuth 왕복만 확인.)
-- **② 구글 로그인(M4 잔여):** 카카오와 같은 패턴 — Google Cloud OAuth 클라 + 인앱웹뷰 폴백. `src/server/auth.ts`·`/auth/*`·`LoginSheet`에 provider 분기.
-- **③ 그룹 지속/이름 편집:** `kind='group'`(현재 전부 'quick') + 그룹명 편집 액션(공개 write→withRateLimit+zod). 내역탭 식별성↑.
+- **✅ ② 구글 로그인(M4 잔여) — 코드 완료(2026-06-22, ADR-029).** 외부 설정(Google Cloud OAuth 클라 + Supabase Providers→Google 활성) + 구글 OAuth 왕복 폰 스모크만 잔여.
+- **③ 그룹 지속/이름 편집(다음 후보):** `kind='group'`(현재 전부 'quick') + 그룹명 편집 액션(공개 write→withRateLimit+zod). 내역탭 식별성↑.
 - 그다음 **M6 운영**(레이트리밋 활성+프로덕션 fail-fast 가드·키/토큰 롤·임시그룹 cleanup).
 
 ### 그 외 잔여(웨이브2와 별개)

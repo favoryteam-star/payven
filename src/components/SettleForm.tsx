@@ -182,12 +182,12 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     setFocusMember(null)
   }, [focusMember])
 
-  const goLogin = () => {
+  const goLogin = (provider: 'kakao' | 'google') => {
     sessionStorage.setItem(
       'payven:draft:create',
       JSON.stringify({ mode, title, amount, members, payerIndex, unit, absorberIndex, eventDate, rounds, acct }),
     )
-    window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent('/?resume=1')}`
+    window.location.href = `/auth/login?provider=${provider}&next=${encodeURIComponent('/?resume=1')}`
   }
 
   // ── 파생값 ──
@@ -413,7 +413,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         if ('needLogin' in res) {
           // 만들기 = 안내 시트(입력값 보존). 수정 = 세션 만료 → 로그인 후 수정 화면으로 복귀.
           if (isEdit) {
-            window.location.href = `/auth/login?provider=kakao&next=${encodeURIComponent(`/g/${editSlug}/edit`)}`
+            // 어떤 provider로 로그인했는지 모르니 선택 페이지로(강제하면 다른 계정 → 소유자 게이트 막힘).
+            window.location.href = `/auth?next=${encodeURIComponent(`/g/${editSlug}/edit`)}`
           } else {
             setLoginPrompt(true)
           }
@@ -903,7 +904,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
         }}
         onClose={() => setPadTarget(null)}
       />
-      <LoginSheet open={loginPrompt} onClose={() => setLoginPrompt(false)} onKakao={goLogin} />
+      <LoginSheet open={loginPrompt} onClose={() => setLoginPrompt(false)} onSelect={goLogin} />
     </main>
   )
 }

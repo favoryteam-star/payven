@@ -14,7 +14,8 @@ export default async function EditSettlePage({ params }: Params) {
   const { slug } = await params
 
   const user = await getAuthUser()
-  if (!user) redirect(`/auth/login?provider=kakao&next=${encodeURIComponent(`/g/${slug}/edit`)}`)
+  // 어떤 provider로 로그인했는지 모르니 선택 페이지로(강제하면 다른 계정 → 소유자 게이트 막힘).
+  if (!user) redirect(`/auth?next=${encodeURIComponent(`/g/${slug}/edit`)}`)
 
   const g = await getEditableGroup(slug)
   if (!g) notFound()

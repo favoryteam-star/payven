@@ -1,12 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAuth } from '@/server/auth'
+import { safeNextPath } from '@/lib/next-path'
 
 // 로그인 시작 — 서버가 provider 인증 URL을 받아 브라우저를 리다이렉트.
 // 브라우저는 supabase-js 없이 그냥 이 라우트로 이동만 한다.
 // /auth/login?provider=kakao&next=/items
 export async function GET(req: NextRequest) {
   const provider = req.nextUrl.searchParams.get('provider')
-  const next = req.nextUrl.searchParams.get('next') || '/'
+  const next = safeNextPath(req.nextUrl.searchParams.get('next'))
   if (provider !== 'kakao' && provider !== 'google') {
     return NextResponse.redirect(new URL('/', req.nextUrl.origin))
   }

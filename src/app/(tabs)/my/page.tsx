@@ -1,6 +1,7 @@
 import { getAuthUser } from '@/server/auth'
 import { listUserAccounts } from '@/server/queries'
 import { IcoUser } from '@/components/icons'
+import { LoginButtons } from '@/components/LoginButtons'
 import { ThemeSwitch } from '@/components/ThemeToggle'
 import { AccountManager } from './_components/AccountManager'
 
@@ -30,6 +31,10 @@ export default async function MyPage() {
       (meta.user_name as string) ||
       (meta.nickname as string) ||
       '사용자'
+    // 로그인 출처 표시 — Supabase가 OAuth 로그인 시 app_metadata.provider에 채운다.
+    const provider = user.app_metadata?.provider
+    const providerLabel =
+      provider === 'google' ? '구글 로그인' : provider === 'kakao' ? '카카오 로그인' : '로그인됨'
     return (
       <main className="px-5 pt-6">
         <h1 className="mb-6 text-xl font-bold tracking-tight">마이</h1>
@@ -39,7 +44,7 @@ export default async function MyPage() {
           </div>
           <div className="min-w-0">
             <p className="truncate text-[15px] font-semibold">{name}</p>
-            <p className="text-sm text-neutral-400">카카오 로그인</p>
+            <p className="text-sm text-neutral-400">{providerLabel}</p>
           </div>
         </div>
         <AccountManager initial={accounts} />
@@ -64,14 +69,9 @@ export default async function MyPage() {
         </div>
         <div>
           <p className="text-[15px] font-medium">로그인하면 정산을 저장할 수 있어요</p>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">카카오로 1초 만에 시작</p>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">카카오·구글로 1초 만에 시작</p>
         </div>
-        <a
-          href="/auth/login?provider=kakao&next=/my"
-          className="w-full max-w-xs rounded-2xl bg-[#FEE500] py-3.5 text-center text-sm font-semibold text-[#191600] transition active:scale-[0.99]"
-        >
-          카카오로 시작하기
-        </a>
+        <LoginButtons next="/my" className="w-full max-w-xs" />
       </div>
 
       <ThemeSetting />
