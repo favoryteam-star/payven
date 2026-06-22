@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getAuthUser } from '@/server/auth'
 import { listUserAccounts } from '@/server/queries'
 import { IcoUser } from '@/components/icons'
@@ -15,6 +16,20 @@ function ThemeSetting() {
         <ThemeSwitch />
       </div>
     </section>
+  )
+}
+
+// 법적 고지 링크 — 로그인/비로그인 공통 하단. 배포된 /privacy로.
+function LegalFooter() {
+  return (
+    <div className="mt-10 text-center">
+      <Link
+        href="/privacy"
+        className="text-xs text-neutral-400 underline-offset-2 hover:text-neutral-600 hover:underline dark:hover:text-neutral-300"
+      >
+        개인정보처리방침
+      </Link>
+    </div>
   )
 }
 
@@ -56,6 +71,8 @@ export default async function MyPage() {
             로그아웃
           </button>
         </form>
+
+        <LegalFooter />
       </main>
     )
   }
@@ -75,6 +92,8 @@ export default async function MyPage() {
       </div>
 
       <ThemeSetting />
+
+      <LegalFooter />
     </main>
   )
 }
