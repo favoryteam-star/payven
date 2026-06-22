@@ -14,8 +14,12 @@ export const metadata: Metadata = {
     title: '페이븐',
   },
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    // SVG 파비콘(모던 브라우저) + PNG 폴백. iOS는 apple-touch-icon에 SVG를 무시하므로 PNG 필수.
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/app-icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/app-icon-192.png',
   },
 }
 

@@ -170,7 +170,7 @@
 - **✅ ③ 정산 이름 변경 + 보관 토글 완료(2026-06-22, ADR-030):** 내역 ⋯메뉴에 **이름 변경**(비파괴, `renameGroup` owner 스코프)·**보관**(`kind` 'group'↔'quick' 토글, `setGroupKept`, M6 cleanup 면제 표시·`IcoBookmark` 배지). 스키마·마이그레이션 0(`kind`·`name` 기존). test 66·lint·build green, 로그아웃 회귀 0. 잔여: 로그인 후 이름변경·보관 UI 폰 스모크. **(누적잔액 그룹 본격 UI는 M6 cleanup 때.)**
 - **✅ 내역 카드 정산 진행도 완료(2026-06-22, ADR-032):** 내역 카드 메타 줄에 `✓ 정산 완료`(brand)/`{done}/{total} 완료`(진행 amber·미시작 neutral). `listGroupsByOwner` 3→5쿼리(분담·정산 추가)로 그룹별 `netBalances→minimizeCashFlow`(검증된 도메인 재사용) + 보냈어요 수. `SettlementSummary`에 `doneTransfers`/`totalTransfers`. test 66·lint·build green + 실DB 손검증(3인 그룹 totalTransfers=2). 현재 settlements 0이라 라이브 전부 `0/N`(완료색은 폰 스모크).
 - **✅ 뒤로가기 컨텍스트 인식 완료(2026-06-22, ADR-031):** settle "← 새 정산"이 내역에서 들어와도 항상 홈으로, edit "← 뒤로"가 항상 settle로 가던 것 → **온 곳으로 복귀**(`router.back()`+히스토리 없으면 폴백). settle=`SettleBackLink`(내부→뒤로/외부→새 정산 CTA), edit=클릭 시점 판정. `/auth` 홈으로·탭은 의도적 유지. test 66·lint·build green, 프리뷰(settle 뒤로→홈 복귀) 검증. edit는 폰 스모크 잔여.
-- 그다음 **M6 운영**(레이트리밋 활성+프로덕션 fail-fast 가드·키/토큰 롤·임시그룹 cleanup).
+- 그다음 **M6 운영**(레이트리밋 활성+프로덕션 fail-fast 가드·키/토큰 롤). **임시그룹 cleanup은 보류**(ADR-033 — 로그인 게이트로 무로그인 누적 0, 30일 초과 0개라 불필요. DB 비대해지면 그때 owner-null만 대상으로).
 
 ### 그 외 잔여(웨이브2와 별개)
 - **폰 스모크(미완, OAuth라 자동검증 불가)**: 카카오 로그인 후 ①마이 계좌 CRUD·만들기 자동채움(인라인 첫 저장→칩) ②내역탭 내 정산 목록 렌더.

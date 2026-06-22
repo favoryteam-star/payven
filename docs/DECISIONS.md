@@ -259,4 +259,13 @@
 - **쿼리(`listGroupsByOwner` 확장):** 3쿼리→**5쿼리**(그룹 + 멤버/지출/정산 IN + 분담 IN), N+1 없음. 그룹별로 ExpenseRecord·SettlementRecord 재구성(getGroupBySlug 그룹핑 패턴) 후 도메인 계산. 데이터 불일치(net≠0 등)면 try/catch로 진행도 0(목록 전체 안 깨짐). `SettlementSummary`에 `doneTransfers`·`totalTransfers` 추가.
 - **UI(`HistoryCard`):** 메타 줄(`N명 · 날짜`) 끝에 `totalTransfers>0`일 때만 — 완료=`✓ 정산 완료`(brand) / 진행 중=`{done}/{total} 완료`(amber) / 미시작=`0/{total} 완료`(neutral). 송금 불필요(딱 맞음·1명, total=0)는 미표시.
 - **검증:** test 66·lint·build green. **실DB 손검증(read-only):** 실제 3인 그룹(나 20,000 결제→net 나 +13,332·김철수/홍길동 −6,666)에서 `totalTransfers=2` 정확 일치. 현재 owner 그룹엔 settlements 0건이라 라이브는 전부 `0/N`(완료/진행 색은 폰 스모크). 내역탭 로그인 게이트라 카드 자동 프리뷰 불가(다른 owner-gated 기능과 동일). **DB 쓰기는 안전 분류기가 차단해 e2e 미실행(우회 안 함)** — 계산은 도메인 66테스트 + 손검증으로 담보.
-- **상태:** 확정·라이브(배포 후).
+- **상태:** 확정·라이브(`cfa6454`).
+
+### ADR-033 — 임시그룹 cleanup cron 보류(현재 불필요) ([[ADR-012]] 후속)
+- **맥락(사용자 2026-06-22):** M6 운영 항목으로 "30일 후 quick 그룹 자동삭제 cron"이 [[ADR-012]]·PLAN에 있었음. 만들기 전 실제 필요성 점검.
+- **결정: 지금은 만들지 않는다.** 근거:
+  - **M4 로그인 게이트로 무로그인 생성이 막힘** → 새 그룹은 전부 `owner_id` 있음(=사용자 내역). 주인 없는 일회용 그룹이 **더 누적되지 않음** — cleanup의 원래 목적(무로그인 스팸 청소)이 사실상 소멸.
+  - 실DB 확인(read-only): 전체 31 그룹(주인 없음 7·있음 24), **30일 초과 0개**(앱 일주일). 청소할 대상 자체가 없음.
+- **나중에 만든다면(트리거 = DB 실제 비대):** 대상 = `kind='quick' AND owner_id IS NULL AND created_at < now()-30d`(**사용자 내역은 절대 미포함**). Route Handler `api/cron/cleanup`(CRON_SECRET 가드)로. 옛 무로그인 잔여 7개는 필요 시 1회 정리 가능(크론 불요).
+- **`보관`([[ADR-030]]) 의미:** cleanup이 없으므로 현재는 **"고정/표시" 마커**(기능적 면제 대상 없음) — ADR-030이 정직하게 그렇게 출시함. cleanup이 owned까지 확장될 경우에만 '면제' 의미가 생기는데, 그건 사용자 내역 자동만료라 별도 결정 필요(현재 안 함).
+- **상태:** 보류(미구현). M6에서 제외.
