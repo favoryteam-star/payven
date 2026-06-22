@@ -58,15 +58,6 @@ function formatDateDisplay(ymd: string): string {
 // 모드별 기본 제목. 정산결과는 이 기본값이면 제목 숨김(직접 바꾸면 표시).
 const TITLES: Record<SettleMode, string> = { quick: '빠른정산', items: '항목별 정산', shoot: '한 명이 쏘기' }
 
-// 쏘기('한 명이 다 쏘기') 진입 UI 두 가지를 폰에서 비교 중 — 별로인 걸 뺀다(사용자 결정).
-//  'mode'   = 별도 모드 칩(1/N · 항목별 · 쏘기)
-//  'toggle' = 1/N 안의 토글(똑같이 나누기 ↔ 한 명이 다 쏘기)
-//  'both'   = 둘 다 동시 노출(비교용 임시 — 고른 뒤 진 쪽 + 이 상수 삭제)
-// 두 진입 모두 같은 코어(진 사람만 전액 → 낸 사람에게)를 굴린다. 결정 후 한쪽 분기를 삭제.
-const SHOOT_PLACEMENT = 'both' as 'mode' | 'toggle' | 'both' // 비교용 임시: 둘 다 노출. 고른 뒤 한쪽으로 고정
-const SHOW_SHOOT_CHIP = SHOOT_PLACEMENT !== 'toggle' // 'mode' | 'both'
-const SHOW_SHOOT_TOGGLE = SHOOT_PLACEMENT !== 'mode' // 'toggle' | 'both'
-
 // 인라인 계좌 상태로 변환(만들기=빈값, 수정=기존 계좌 시드).
 function inlineFrom(account: SettleFormInitial['account']): InlineAcct {
   return account ? { bank: account.bankName, no: account.accountNo, holder: account.accountHolder } : EMPTY_INLINE
@@ -78,12 +69,9 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const router = useRouter()
   const isEdit = !!initial
   const editSlug = initial?.editSlug ?? ''
-  // 수정 대상이 '쏘기'(winnerIndex 존재)면 진입 방식에 따라 모드/토글로 복원.
+  // 수정 대상이 '쏘기'(winnerIndex 존재)면 쏘기 모드로 복원(아니면 저장된 모드/기본 quick).
   const initShoot = initial?.winnerIndex != null
-  const [mode, setMode] = useState<SettleMode>(
-    initShoot && SHOW_SHOOT_CHIP ? 'shoot' : (initial?.mode ?? 'quick'), // 칩 가능하면 칩으로, 아니면 토글
-  )
-  const [shootOn, setShootOn] = useState(initShoot && !SHOW_SHOOT_CHIP) // 토글 전용 placement에서만 토글로 복원
+  const [mode, setMode] = useState<SettleMode>(initShoot ? 'shoot' : (initial?.mode ?? 'quick'))
   // 공유 입력
   const [title, setTitle] = useState<string>(initial?.title ?? TITLES.quick) // 정산 제목(기본=모드명, 수정 가능)
   const [members, setMembers] = useState<string[]>(initial?.members ?? ['나', ''])
@@ -167,7 +155,6 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     try {
       const d = JSON.parse(raw)
       if (d.mode === 'quick' || d.mode === 'items' || d.mode === 'shoot') setMode(d.mode)
-      if (typeof d.shootOn === 'boolean') setShootOn(d.shootOn)
       if (typeof d.title === 'string') setTitle(d.title)
       if (typeof d.amount === 'number') setAmount(d.amount)
       if (Array.isArray(d.members)) setMembers(d.members)
@@ -204,7 +191,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   const goLogin = (provider: 'kakao' | 'google') => {
     sessionStorage.setItem(
       'payven:draft:create',
-      JSON.stringify({ mode, shootOn, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct }),
+      JSON.stringify({ mode, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct }),
     )
     window.location.href = `/auth/login?provider=${provider}&next=${encodeURIComponent('/?resume=1')}`
   }
@@ -215,8 +202,8 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   // 결제자가 비워졌거나 범위를 벗어나면 첫 채워진 멤버로 — 표시·계산·제출의 단일 출처.
   const effectivePayer = filledIdx.includes(payerIndex) ? payerIndex : (filledIdx[0] ?? 0)
   const effRoundPayer = (rd: Round) => (filledIdx.includes(rd.payer) ? rd.payer : (filledIdx[0] ?? 0))
-  // 쏘기 = 진입 방식에 따라 별도 모드 또는 1/N 안 토글. 둘 다 1/N과 같은 입력(금액·멤버·낸 사람)을 공유.
-  const isShoot = mode === 'shoot' || (mode === 'quick' && shootOn)
+  // 쏘기 = 별도 모드(🎲 쏘기 칩). 1/N과 같은 입력(금액·멤버·낸 사람)을 공유하되 분담 대신 한 명이 전액.
+  const isShoot = mode === 'shoot'
   // 1/N처럼 금액 한 칸을 쓰는 모드(쏘기 포함) — 항목별만 차수 묶음.
   const isAmountMode = mode === 'quick' || mode === 'shoot'
   // 다 쏠 사람: 명시 선택이 유효하면 그 사람, 아니면 null(미선택 → 제출 막힘).
@@ -535,7 +522,7 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       <ModeChips
         value={mode}
         onChange={switchMode}
-        modes={SHOW_SHOOT_CHIP ? ['quick', 'items', 'shoot'] : ['quick', 'items']}
+        modes={['quick', 'items', 'shoot']}
         className="mb-4"
       />
 
@@ -769,37 +756,6 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
                 }
               >
                 {members[i].trim()}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* 쏘기 진입(placement B) — 1/N 안에서 '똑같이 나누기 ↔ 한 명이 다 쏘기' 토글 */}
-      {SHOW_SHOOT_TOGGLE && mode === 'quick' && filledIdx.length >= 1 && (
-        <section className="mb-5">
-          <p className="mb-2 text-sm font-medium text-neutral-500">어떻게 나눠요?</p>
-          <div className="flex gap-2">
-            {[
-              { on: false, label: '똑같이 나누기' },
-              { on: true, label: '🎲 한 명이 다 쏘기' },
-            ].map((o) => (
-              <button
-                key={o.label}
-                type="button"
-                onClick={() => {
-                  setShootOn(o.on)
-                  setGameOpen(false)
-                }}
-                aria-pressed={shootOn === o.on}
-                className={
-                  'flex-1 rounded-xl py-2.5 text-sm font-medium transition ' +
-                  (shootOn === o.on
-                    ? 'bg-brand text-white'
-                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300')
-                }
-              >
-                {o.label}
               </button>
             ))}
           </div>
