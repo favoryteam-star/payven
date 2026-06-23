@@ -280,3 +280,12 @@
 - **검증:** tsc·test **69**(쏘기 net/전액/자기쏘기 불변식 +3)·lint·build + 프리뷰 e2e(모드 칩→picker→게임→"철수님이 30,000원 다 쏴요→나님에게" / 자기쏘기 "본인이 냈으니 정산할 게 없어요" / 단위·흡수자 숨김). **8에이전트 적대리뷰(money/하드룰/엣지 3렌즈→검증): 확정 실결함 0**(2건=위 무해 휴리스틱). 생성/수정 RPC 0-share 허용 확인.
 - **잔여:** 로그인 생성→정산결과 금액 폰 스모크(OAuth라 자동검증 불가).
 - **상태:** 확정·라이브(모드 칩, `7989ba1` 최초 + B 삭제 마무리 커밋).
+
+### ADR-035 — "내 모임"(저장 멤버 그룹) ([[ADR-020]] 최근목록 보완)
+- **맥락(사용자 2026-06-23, 출시 직전):** 자주 정산하는 친구 묶음이 있는데 매번 새로 등록이 번거롭고, [[ADR-020]] "최근 같이 정산한 사람"은 **최근순이라 딴 정산 몇 번 하면 단골이 밀려 사라짐**(휘발). 단골 = 사용자가 고른 **고정 묶음**으로.
+- **사용자 결정(질문 후):** "그룹을 만들 수 있게" + 이름 "**모임**"(앱 내부 '그룹'=정산 groups라 혼동 방지) + **만들기 폼 안에서 '현재 멤버 저장'도 포함**. ('빈도 칩만'·'localStorage 모임' 대안 탈락 — 서버 동기화 일관성 위해 테이블.)
+- **데이터 = 새 테이블 `member_groups`(0013):** `user_id`(→auth.users cascade)·`label`·`names text[]`('나' 제외)·`created_at`. 멤버는 이름 문자열일 뿐(전역 인물 엔티티 없음)이라 `text[]`로 — 최근목록 방식과 일관, 조인 불필요. **RLS deny-all + REVOKE + service_role grant**(하드룰5, [[ADR-013]] user_accounts와 동형). RPC 불필요(단순 CRUD, 전부 `user_id`+`id` 스코프).
+- **구조(user_accounts 미러링):** server/queries(`listMemberGroups`/`create`/`update`/`delete`)·validation(`memberGroupFieldsSchema` label≤20·names 1~30·각≤20·중복제거 transform)·actions(읽기 `getMyMemberGroupsAction` + 쓰기 `save`/`update`/`deleteMemberGroupAction` = withRateLimit+zod+로그인, 하드룰6)·마이 탭 `MemberGroupManager`(추가/수정/삭제)·`useMyMemberGroups` 훅(refresh 포함).
+- **만들기 폼(SettleForm) 통합:** ①"내 모임" **칩 탭 → 멤버 전원 추가**(`addMemberNames`: 빈 칸 먼저 채우고 모자라면 덧붙임 + 차수 among 동기화, 이미 있는 이름 skip, 다 든 모임은 칩 숨김) ②**"현재 멤버 저장"**(로그인 시, '나' 빼고 친구만, 베스트에포트). 로그인 신호는 서버(홈·edit)에서 `isLoggedIn` prop으로(모임=로그인 기능 → 홈 `getAuthUser`로 Dynamic 전환).
+- **검증:** tsc·test **69**(도메인 불변)·lint·build(server-only 누수 0)·**RLS on/정책0/REVOKE 카탈로그 확인** + 프리뷰 비로그인 무회귀(홈·마이 정상·콘솔0·모임 UI 비로그인 숨김 정상). 실DB CRUD e2e는 **오토모드가 프로덕션 실유저 테스트쓰기 차단** → 미실행(쿼리는 검증된 user_accounts 패턴 동형·owner 스코프 `.eq(user_id).eq(id)`). **잔여(폰 스모크): 로그인 후 모임 CRUD·칩 전원추가·현재멤버저장**(OAuth 게이트).
+- **상태:** 확정·검증(라이브 배포 대기 — 키 롤과 같은 배포에 실음). 마이그레이션 0013(원격 적용됨).

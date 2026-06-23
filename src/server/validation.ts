@@ -36,6 +36,26 @@ export type UpdateAccountInput = z.infer<typeof updateAccountSchema>
 // 삭제/기본지정 등 id만 받는 액션.
 export const accountIdSchema = z.object({ id: z.string().uuid() })
 
+// ── 내 모임(저장 멤버 그룹) ──
+// 자주 함께 정산하는 사람 묶음. label=표시 이름, names=멤버 이름들('나' 제외 — 자기 자신은 만들 때 자동).
+export const memberGroupFieldsSchema = z.object({
+  label: z.string().trim().min(1, '모임 이름을 입력해 주세요').max(20),
+  names: z
+    .array(z.string().trim().min(1, '이름을 확인해 주세요').max(20))
+    .min(1, '한 명 이상 넣어 주세요')
+    .max(30)
+    // 중복 이름 제거(클라가 안 거른 경우 백스톱 — 각 원소는 이미 trim·비어있지 않음).
+    .transform((arr) => [...new Set(arr)]),
+})
+export type MemberGroupFields = z.infer<typeof memberGroupFieldsSchema>
+
+// 모임 수정(id 포함).
+export const updateMemberGroupSchema = memberGroupFieldsSchema.extend({ id: z.string().uuid() })
+export type UpdateMemberGroupInput = z.infer<typeof updateMemberGroupSchema>
+
+// 모임 삭제 — id만.
+export const memberGroupIdSchema = z.object({ id: z.string().uuid() })
+
 // 반올림 단위(보조단위 없는 정수 원). 1=현행(자동), 10/100/1000=단위로 내림 후 남는 금액 흡수자에게.
 export const roundUnitSchema = z
   .union([z.literal(1), z.literal(10), z.literal(100), z.literal(1000)])

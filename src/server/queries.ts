@@ -5,10 +5,12 @@ import { equalSplit, minimizeCashFlow, netBalances, splitByWeights } from '@/dom
 import type { ExpenseRecord, SettlementRecord } from '@/domain/types'
 import type {
   ItemizedBillInput,
+  MemberGroupFields,
   QuickSettleInput,
   SaveAccountInput,
   UpdateAccountInput,
   UpdateItemizedBillInput,
+  UpdateMemberGroupInput,
   UpdateQuickSettleInput,
 } from './validation'
 import type { Json } from './database.types'
@@ -846,4 +848,61 @@ export async function deleteUserAccount(userId: string, id: string): Promise<voi
 /** 기본 계좌 지정(본인 것만). RPC가 소유·존재 확인 + 원자 전환(없으면 no-op). */
 export async function setDefaultUserAccount(userId: string, id: string): Promise<void> {
   await setOnlyDefault(userId, id)
+}
+
+// ── 내 모임(저장 멤버 그룹) ───────────────────────────────────────────
+// 전부 user_id로 스코프 → 남의 모임을 못 건드림(service_role여도 방어). 단순 CRUD라 RPC 불필요.
+
+/** 저장된 멤버 그룹(브라우저에 그대로 전달 가능한 평범한 형태). */
+export interface MemberGroup {
+  id: string
+  label: string
+  names: string[]
+}
+
+function mapMemberGroup(r: { id: string; label: string; names: string[] | null }): MemberGroup {
+  return { id: r.id, label: r.label, names: r.names ?? [] }
+}
+
+/** 사용자의 모임 목록(만든 순 — 오래된 것 먼저). */
+export async function listMemberGroups(userId: string): Promise<MemberGroup[]> {
+  const supa = getAdminClient()
+  const { data, error } = await supa
+    .from('member_groups')
+    .select('id, label, names')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(mapMemberGroup)
+}
+
+/** 모임 추가. */
+export async function createMemberGroup(userId: string, input: MemberGroupFields): Promise<void> {
+  const supa = getAdminClient()
+  const { error } = await supa
+    .from('member_groups')
+    .insert({ user_id: userId, label: input.label, names: input.names })
+  if (error) throw new Error(error.message)
+}
+
+/** 모임 수정(본인 것만). user_id 스코프라 남의 것엔 0행 영향. */
+export async function updateMemberGroup(userId: string, input: UpdateMemberGroupInput): Promise<void> {
+  const supa = getAdminClient()
+  const { error } = await supa
+    .from('member_groups')
+    .update({ label: input.label, names: input.names })
+    .eq('user_id', userId)
+    .eq('id', input.id)
+  if (error) throw new Error(error.message)
+}
+
+/** 모임 삭제(본인 것만). */
+export async function deleteMemberGroup(userId: string, id: string): Promise<void> {
+  const supa = getAdminClient()
+  const { error } = await supa
+    .from('member_groups')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', id)
+  if (error) throw new Error(error.message)
 }

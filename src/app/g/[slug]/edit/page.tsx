@@ -24,6 +24,7 @@ export default async function EditSettlePage({ params }: Params) {
 
   return (
     <SettleForm
+      isLoggedIn
       initial={{
         editSlug: g.slug,
         mode: g.mode,

@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { getAuthUser } from '@/server/auth'
-import { listUserAccounts } from '@/server/queries'
+import { listMemberGroups, listUserAccounts } from '@/server/queries'
 import { IcoUser } from '@/components/icons'
 import { LoginButtons } from '@/components/LoginButtons'
 import { ThemeSwitch } from '@/components/ThemeToggle'
 import { AccountManager } from './_components/AccountManager'
+import { MemberGroupManager } from './_components/MemberGroupManager'
 
 // 화면 테마 설정 행(로그인/비로그인 공통). 스위치는 클라이언트(ThemeSwitch).
 function ThemeSetting() {
@@ -38,7 +39,10 @@ export default async function MyPage() {
   const user = await getAuthUser()
 
   if (user) {
-    const accounts = await listUserAccounts(user.id)
+    const [accounts, memberGroups] = await Promise.all([
+      listUserAccounts(user.id),
+      listMemberGroups(user.id),
+    ])
     const meta = user.user_metadata ?? {}
     const name =
       (meta.name as string) ||
@@ -63,6 +67,7 @@ export default async function MyPage() {
           </div>
         </div>
         <AccountManager initial={accounts} />
+        <MemberGroupManager initial={memberGroups} />
 
         <ThemeSetting />
 

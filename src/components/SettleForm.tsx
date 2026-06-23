@@ -8,6 +8,7 @@ import {
   addItemizedBillAction,
   getRecentMembersAction,
   quickSettleAction,
+  saveMemberGroupAction,
   updateItemizedBillAction,
   updateQuickSettleAction,
 } from '@/app/actions'
@@ -19,6 +20,7 @@ import { LoginSheet } from '@/components/LoginSheet'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { AccountField, EMPTY_INLINE, NEW_ACCOUNT, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 import { AbsorberGame } from '@/components/AbsorberGame'
+import { useMyMemberGroups } from '@/components/memberGroups'
 
 // 메뉴(항목) 1개. among = 멤버 길이의 참여 여부(기본 전원).
 export type RoundItem = { name: string; amount: number; among: boolean[] }
@@ -65,7 +67,13 @@ function inlineFrom(account: SettleFormInitial['account']): InlineAcct {
 
 // 1/N과 항목별을 한 페이지에서 토글로. 항목별 = 차수(round) 묶음, 차수마다 낸 사람 + 메뉴(간단=총액 1줄).
 // initial이 있으면 '수정'(교체): 상태를 기존 정산으로 시드하고 교체 액션을 호출한다.
-export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
+export function SettleForm({
+  initial,
+  isLoggedIn = false,
+}: {
+  initial?: SettleFormInitial
+  isLoggedIn?: boolean
+}) {
   const router = useRouter()
   const isEdit = !!initial
   const editSlug = initial?.editSlug ?? ''
@@ -117,6 +125,13 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       alive = false
     }
   }, [])
+
+  // 저장된 모임(자주 함께 정산하는 사람 묶음) — 탭 한 번에 전원 추가. 미로그인이면 빈 배열.
+  const { groups: memberGroups, refresh: refreshMemberGroups } = useMyMemberGroups()
+  const [groupSaveOpen, setGroupSaveOpen] = useState(false)
+  const [groupLabel, setGroupLabel] = useState('')
+  const [groupSaved, setGroupSaved] = useState(false)
+  const [groupSaving, setGroupSaving] = useState(false)
 
   // 받을 계좌. null=로딩. 저장계좌 있으면 칩(accountId), 없으면 인라인 입력(acct). undefined=미선택(기본 자동).
   const accounts = useMyAccounts()
@@ -211,6 +226,10 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
   // 최근 참여자 빠른 추가: 이미 들어간 이름은 제외.
   const currentNames = new Set(members.map((m) => m.trim()).filter(Boolean))
   const memberSuggestions = recentNames.filter((n) => !currentNames.has(n)).slice(0, 8)
+  // 저장된 모임 칩 — 멤버가 이미 다 들어간 모임은 숨김(최근 칩과 동일한 동작).
+  const groupSuggestions = (memberGroups ?? []).filter((g) =>
+    g.names.some((n) => !currentNames.has(n)),
+  )
 
   // 남는 금액 흡수자 기본값 = 낸 사람(헛탭 방지). 미선택이면 이 사람이 흡수하되, 칩에 표시되고 바꿀 수 있다.
   const firstPaidRound = rounds.find((rd) => rd.items.some((it) => it.amount > 0))
@@ -266,6 +285,57 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
     } else {
       setMembers((p) => [...p, name])
       setRounds(addAmong)
+    }
+  }
+  // 모임 칩 → 멤버 전원 추가(이미 있는 이름은 건너뜀). 빈 칸 먼저 채우고 모자라면 덧붙임 + among 동기화.
+  const addMemberNames = (names: string[]) => {
+    const present = new Set(members.map((m) => m.trim()).filter(Boolean))
+    const fresh: string[] = []
+    for (const raw of names) {
+      const name = raw.trim()
+      if (!name || present.has(name)) continue
+      present.add(name)
+      fresh.push(name)
+    }
+    if (fresh.length === 0) return
+    const result = [...members]
+    let appended = 0
+    for (const name of fresh) {
+      const empty = result.findIndex((m) => !m.trim())
+      if (empty >= 0) result[empty] = name
+      else {
+        result.push(name)
+        appended++
+      }
+    }
+    setMembers(result)
+    if (appended > 0) {
+      setRounds((rs) => {
+        let next = rs
+        for (let k = 0; k < appended; k++) next = addAmong(next)
+        return next
+      })
+    }
+  }
+
+  // '현재 멤버를 모임으로 저장' — '나'(0번) 빼고 채워진 친구 이름만. 로그인 필요(베스트에포트).
+  const friendNames = [...new Set(members.slice(1).map((m) => m.trim()).filter(Boolean))]
+  const saveCurrentAsGroup = async () => {
+    const label = groupLabel.trim()
+    if (!label || friendNames.length === 0 || groupSaving) return
+    setGroupSaving(true)
+    try {
+      const res = await saveMemberGroupAction({ label, names: friendNames })
+      if (res.ok) {
+        setGroupSaved(true)
+        setGroupSaveOpen(false)
+        setGroupLabel('')
+        refreshMemberGroups()
+      }
+    } catch {
+      // 저장 실패해도 정산 흐름엔 영향 0.
+    } finally {
+      setGroupSaving(false)
     }
   }
   const removeMember = (i: number) => {
@@ -515,6 +585,73 @@ export function SettleForm({ initial }: { initial?: SettleFormInitial }) {
       >
         <IcoPlus className="h-4 w-4" /> 사람 추가
       </button>
+
+      {/* 내 모임 — 저장한 사람 묶음을 탭 한 번에 전원 추가 + '현재 멤버 저장'(로그인 시). */}
+      {(groupSuggestions.length > 0 || (isLoggedIn && friendNames.length > 0)) && (
+        <div className="mt-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">내 모임</p>
+            {isLoggedIn && friendNames.length > 0 && !groupSaveOpen && (
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupSaved(false)
+                  setGroupSaveOpen(true)
+                }}
+                className="text-xs font-medium text-brand"
+              >
+                현재 멤버 저장
+              </button>
+            )}
+          </div>
+          {groupSuggestions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {groupSuggestions.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => addMemberNames(g.names)}
+                  className="inline-flex items-center gap-1 rounded-full border border-brand/30 bg-brand/5 px-3 py-2 text-sm font-medium text-brand-700 transition active:scale-95 hover:border-brand dark:border-brand/40 dark:text-brand"
+                >
+                  <IcoPlus className="h-3.5 w-3.5" /> {g.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {groupSaveOpen && (
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                value={groupLabel}
+                onChange={(e) => setGroupLabel(e.target.value)}
+                placeholder="모임 이름 (예: 회사 점심팟)"
+                maxLength={20}
+                className="w-full rounded-xl border border-neutral-200 bg-transparent px-3 py-2 text-[16px] outline-none focus:border-brand dark:border-neutral-700"
+              />
+              <button
+                type="button"
+                onClick={() => void saveCurrentAsGroup()}
+                disabled={!groupLabel.trim() || groupSaving}
+                className="shrink-0 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white transition active:scale-95 disabled:opacity-50"
+              >
+                {groupSaving ? '저장 중…' : '저장'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupSaveOpen(false)
+                  setGroupLabel('')
+                }}
+                className="shrink-0 rounded-xl border border-neutral-200 px-3 py-2 text-sm text-neutral-500 dark:border-neutral-700"
+              >
+                취소
+              </button>
+            </div>
+          )}
+          {groupSaved && !groupSaveOpen && (
+            <p className="mt-1.5 text-xs text-brand">모임으로 저장했어요</p>
+          )}
+        </div>
+      )}
 
       {/* 최근 참여자 빠른 추가 — 과거 정산에서 쓴 이름을 탭으로(매번 타이핑 안 하게). */}
       {memberSuggestions.length > 0 && (

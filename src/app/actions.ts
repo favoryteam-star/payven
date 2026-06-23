@@ -7,6 +7,8 @@ import {
   deleteGroupSchema,
   itemizedBillSchema,
   markSentSchema,
+  memberGroupFieldsSchema,
+  memberGroupIdSchema,
   quickSettleSchema,
   renameGroupSchema,
   saveAccountSchema,
@@ -14,15 +16,19 @@ import {
   undoSettlementSchema,
   updateAccountSchema,
   updateItemizedBillSchema,
+  updateMemberGroupSchema,
   updateQuickSettleSchema,
   type AccountFields,
 } from '@/server/validation'
 import {
   addItemizedBill,
+  createMemberGroup,
   createQuickSettle,
   createUserAccount,
   deleteGroup,
+  deleteMemberGroup,
   deleteUserAccount,
+  listMemberGroups,
   listRecentMemberNames,
   listUserAccounts,
   recordSettlement,
@@ -31,8 +37,10 @@ import {
   setGroupKept,
   undoSettlement,
   updateItemizedBill,
+  updateMemberGroup,
   updateQuickSettle,
   updateUserAccount,
+  type MemberGroup,
   type SavedAccount,
 } from '@/server/queries'
 import { getAuthUser } from '@/server/auth'
@@ -185,6 +193,41 @@ export const setDefaultAccountAction = withRateLimit(async (raw: unknown): Promi
   if (!user) return { ok: false, needLogin: true }
   const { id } = accountIdSchema.parse(raw)
   await setDefaultUserAccount(user.id, id)
+  return { ok: true }
+})
+
+// ── 내 모임(저장 멤버 그룹) ──────────────────────────────────────────
+// 읽기는 로그인 시 목록, 쓰기는 withRateLimit + zod + 로그인(하드룰 6).
+type MemberGroupResult = { ok: true } | { ok: false; needLogin?: true; error?: string }
+
+/** 만들기 폼·마이가 쓰는 내 모임 조회(읽기). 미로그인이면 빈 배열. */
+export async function getMyMemberGroupsAction(): Promise<MemberGroup[]> {
+  const user = await getAuthUser()
+  if (!user) return []
+  return listMemberGroups(user.id)
+}
+
+export const saveMemberGroupAction = withRateLimit(async (raw: unknown): Promise<MemberGroupResult> => {
+  const user = await getAuthUser()
+  if (!user) return { ok: false, needLogin: true }
+  const input = memberGroupFieldsSchema.parse(raw)
+  await createMemberGroup(user.id, input)
+  return { ok: true }
+})
+
+export const updateMemberGroupAction = withRateLimit(async (raw: unknown): Promise<MemberGroupResult> => {
+  const user = await getAuthUser()
+  if (!user) return { ok: false, needLogin: true }
+  const input = updateMemberGroupSchema.parse(raw)
+  await updateMemberGroup(user.id, input)
+  return { ok: true }
+})
+
+export const deleteMemberGroupAction = withRateLimit(async (raw: unknown): Promise<MemberGroupResult> => {
+  const user = await getAuthUser()
+  if (!user) return { ok: false, needLogin: true }
+  const { id } = memberGroupIdSchema.parse(raw)
+  await deleteMemberGroup(user.id, id)
   return { ok: true }
 })
 

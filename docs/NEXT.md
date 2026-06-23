@@ -163,6 +163,13 @@
 - **흡수:** 원래 항목별=1차수 N메뉴 / ADR-024 per-item payer=N차수 1메뉴 / 1차2차3차+메뉴=N차수 다메뉴 → 2단이 셋 다 포함.
 - **검증:** build·lint·test 58. 실DB e2e(1차 삼겹살 전원+소주 나·홍 / 2차 홍 김철수빠짐 → bill_id 2그룹·net 나+9,000·홍−1,000·김−8,000·합0). 프리뷰(차수 카드·낸사람·간단↔메뉴별로 나누기 토글·차수 추가·콘솔0). 한계(V2): 차수 장소명 미저장(자동 N차)·다른 결제자 계좌 자동표시 없음. 잔여: 로그인 생성→차수 폰 스모크.
 
+## ✅ "내 모임"(저장 멤버 그룹) (완료·검증 2026-06-23, 배포 대기)
+사용자(출시 직전): 자주 정산하는 친구 묶음을 매번 새로 등록하기 번거롭고, 최근목록([[ADR-020]])은 최근순이라 단골이 밀려 사라짐 → **고정 묶음 "모임"**. 상세 [[DECISIONS#ADR-035]].
+- **새 테이블 `member_groups`(0013):** user_id·label·`names text[]`('나' 제외)·created_at. RLS deny-all+REVOKE+service_role(하드룰5, user_accounts 동형). RPC 0(단순 CRUD, user_id+id 스코프).
+- **server/validation/actions:** `list/create/update/deleteMemberGroup` + 마이 `MemberGroupManager`(추가/수정/삭제) + `useMyMemberGroups` 훅. 쓰기=withRateLimit+zod+로그인(하드룰6), 읽기 `getMyMemberGroupsAction`.
+- **만들기 폼(SettleForm):** "내 모임" 칩 탭→**전원 추가**(`addMemberNames`, 빈칸 채우고 덧붙임+among 동기화·중복 skip·다 든 모임 숨김) + **"현재 멤버 저장"**(로그인 시·'나' 제외·베스트에포트). 로그인 신호=서버 `isLoggedIn` prop(홈 `getAuthUser`로 Dynamic).
+- **검증:** tsc·test 69·lint·build(누수0)·RLS/정책0/REVOKE 카탈로그 + 프리뷰 비로그인 무회귀(홈·마이·콘솔0·모임 비로그인 숨김). 실DB CRUD는 오토모드가 프로덕션 실유저 쓰기 차단→미실행(검증된 user_accounts 패턴 동형). **잔여: 로그인 후 모임 CRUD·칩 전원추가·현재멤버저장 폰 스모크.**
+
 ## ✅ 게임 B — "한 명이 다 쏘기"(진 사람→낸 사람 전액) (완료·확정·라이브 2026-06-23, `58d2af0`)
 게임으로 한 명을 뽑아 **전액 부담**시키는 모드. 사용자 결정: **정산으로 기록**(진 사람이 낸 사람에게 전액, 기존 정산 보드·토스·보냈어요 그대로 재사용) + **진입 두 방식 둘 다 만들어 폰 비교 후 한쪽 삭제**.
 - **도메인/스키마/RPC 변경 0:** "쏘기" = quick settle의 분담을 `[0,…,전액@진사람,…,0]`로 둔 것(`winnerIndex` 하나 추가). `equalSplit(amount,[진사람])`이 전액을 그 사람에게 → net이 진사람→낸사람 전액. **진 사람=낸 사람이면 net 0 → "정산할 게 없어요"**(완료 모먼트). RPC가 share=0·합 미체크라 생성/수정 모두 그대로 동작.
