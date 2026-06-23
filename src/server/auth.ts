@@ -52,3 +52,19 @@ export async function getAuthUser() {
     return null
   }
 }
+
+/**
+ * 표시 이름 해석: 사용자가 정한 닉네임(display_name) 우선, 없으면 OAuth 제공 이름. 없으면 null.
+ * display_name은 provider가 안 채우는 커스텀 키라 재로그인에도 보존된다(name/full_name은 매 로그인 갱신).
+ */
+export function resolveDisplayName(
+  user: { user_metadata?: Record<string, unknown> | null } | null,
+): string | null {
+  const m = user?.user_metadata
+  if (!m) return null
+  const pick = (k: string) => {
+    const v = m[k]
+    return typeof v === 'string' && v.trim() ? v.trim() : null
+  }
+  return pick('display_name') || pick('name') || pick('full_name') || pick('user_name') || pick('nickname')
+}

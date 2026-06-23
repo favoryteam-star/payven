@@ -56,6 +56,12 @@ export type UpdateMemberGroupInput = z.infer<typeof updateMemberGroupSchema>
 // 모임 삭제 — id만.
 export const memberGroupIdSchema = z.object({ id: z.string().uuid() })
 
+// 프로필 닉네임(표시 이름) 변경 — user_metadata.display_name. 정산 멤버 이름과 같은 길이 한도(≤20).
+export const updateNicknameSchema = z.object({
+  name: z.string().trim().min(1, '이름을 입력해 주세요').max(20),
+})
+export type UpdateNicknameInput = z.infer<typeof updateNicknameSchema>
+
 // 반올림 단위(보조단위 없는 정수 원). 1=현행(자동), 10/100/1000=단위로 내림 후 남는 금액 흡수자에게.
 export const roundUnitSchema = z
   .union([z.literal(1), z.literal(10), z.literal(100), z.literal(1000)])

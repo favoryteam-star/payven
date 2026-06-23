@@ -296,4 +296,13 @@
 - **구현 = `amongRow`(메뉴/총액 공용 참여칩 헬퍼)에 "🎲 한 명이 쏘기" 하나 추가.** 참여자 ≥2면 버튼 노출 → `AbsorberGame`([[ADR-016]]/034 범용 컴포넌트, 후보=현재 참여자, prompt "{금액} 누가 쏠지! 💸")로 한 명 뽑아 `among=[winner]`. 참여자 1명이면 "{이름}님이 이거 다 쏴요 💸 (참여 다시 누르면 나눠 내기)" 힌트. 단순/메뉴 둘 다 `amongRow` 한 함수라 한 번에 커버.
 - **변경 0:** 스키마·도메인·RPC·validation(항목 참여자 min 1 충족)·제출(among→participants 그대로)·`getEditableGroup`(1-share 항목→among 1명 자연 복원) **전부 무변경**, SettleForm UI만(`itemGame` 상태 + amongRow + switchMode 리셋).
 - **검증:** tsc·test 69·lint·build + 프리뷰 e2e(메뉴별: 게임→철수 당첨→확정→among 철수만 collapse+힌트→참여 재선택 복귀 / 자리별: 단순 차수에도 버튼 / 콘솔0). 생성은 로그인 게이트라 폰 스모크 잔여(엔진은 단일 참여자 항목 이미 처리).
-- **상태:** 확정·검증(라이브 배포 대기). 마이그레이션 0(엔진 재사용). **알려진 사소 카피(선택):** `AbsorberGame` 확정 버튼 "철수으로 정하기"(받침 없는 이름엔 '로' — 기존 컴포넌트 카피, ADR-016/034부터 있던 것, 본 변경과 무관).
+- **상태:** 확정·라이브(`04f6635`). 마이그레이션 0(엔진 재사용). **알려진 사소 카피(선택):** `AbsorberGame` 확정 버튼 "철수으로 정하기"(받침 없는 이름엔 '로' — 기존 컴포넌트 카피, ADR-016/034부터 있던 것, 본 변경과 무관).
+
+### ADR-037 — 프로필 닉네임 수정 + 정산 '내 이름' 기본값
+- **맥락(사용자 2026-06-23):** "마이에서 닉네임 수정 가능해야 하지 않나?" 확인 결과 OAuth 이름(`user_metadata`)이 **마이 인사말에만** 쓰여(정산은 자유 텍스트 멤버) → 수정만 하면 화장품. 질문 후 **수정 + 새 정산 '내 이름' 기본값으로 사용**(친구가 공유 링크에서 '나' 대신 실명을 봄) 결정.
+- **저장 키 = `user_metadata.display_name`(커스텀):** name/full_name은 provider가 매 로그인 갱신 → 거기 쓰면 재로그인 시 덮어씌워짐. `display_name`은 Kakao/Google이 안 채우는 키라 **편집값이 보존**됨. 표시 해석 `resolveDisplayName` = `display_name ?? name ?? full_name ?? user_name ?? nickname`(auth.ts 공용, 마이·홈 둘 다).
+- **인증 메타데이터 첫 쓰기:** 지금껏 auth는 읽기만(`getAuthUser`). `updateNicknameAction`(withRateLimit+zod+로그인)이 **service_role 아니라 `getSupabaseAuth()` 세션 클라**로 `auth.updateUser({ data: { display_name } })` — 세션 쿠키로 본인만, setAll로 갱신 쿠키 기록(서버 액션이라 쓰기 가능). 하드룰(데이터=service_role / 인증=anon 세션) 유지.
+- **'내 이름' 기본값:** 홈(서버)이 `resolveDisplayName(user)`→`myName` prop으로 SettleForm에 전달, member[0] 기본 = `myName`(없거나 >20자면 '나' 폴백 — 멤버 길이 한도). 수정/anon/draft 복원은 불변(initial·draft 우선). **부작용 차단:** member0가 닉네임이면 `listRecentMemberNames`('나'만 필터)가 본인을 친구 칩으로 노출 → `getRecentMembersAction`에서 `resolveDisplayName(user)` 이름도 제외.
+- **변경:** validation(`updateNicknameSchema` ≤20)·auth(`resolveDisplayName`)·actions(`updateNicknameAction`+recent 본인 제외)·마이 `NicknameEditor`(인라인 수정, 16px)·홈 myName prop·SettleForm selfDefault. 마이그레이션·도메인·RPC 0.
+- **검증:** tsc·test 69·lint·build(server-only 누수0) + 프리뷰 비로그인 무회귀(홈 '내 이름'='나'·마이 200 로그인 CTA·콘솔0). 잔여(폰 스모크): 로그인 후 닉네임 수정→마이 반영·재로그인 보존·새 정산 '내 이름'=닉네임·공유 링크 실명 노출.
+- **상태:** 확정·검증(라이브 배포 대기).

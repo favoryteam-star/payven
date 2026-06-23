@@ -17,6 +17,7 @@ import {
   updateAccountSchema,
   updateItemizedBillSchema,
   updateMemberGroupSchema,
+  updateNicknameSchema,
   updateQuickSettleSchema,
   type AccountFields,
 } from '@/server/validation'
@@ -43,7 +44,7 @@ import {
   type MemberGroup,
   type SavedAccount,
 } from '@/server/queries'
-import { getAuthUser } from '@/server/auth'
+import { getAuthUser, getSupabaseAuth, resolveDisplayName } from '@/server/auth'
 
 // 무로그인 공개 write 액션 → withRateLimit + zod 필수(CLAUDE.md 하드룰 6).
 // 만들기 = 로그인 게이트: 미로그인이면 needLogin 신호(클라가 입력값 보존 후 로그인으로). 보기는 무로그인 유지.
@@ -157,11 +158,14 @@ export async function getMyAccountsAction(): Promise<SavedAccount[]> {
   return listUserAccounts(user.id)
 }
 
-/** 만들기 폼의 '최근 참여자' 빠른 추가용 이름 목록(읽기). 미로그인이면 빈 배열. */
+/** 만들기 폼의 '최근 참여자' 빠른 추가용 이름 목록(읽기). 미로그인이면 빈 배열.
+ *  본인 표시 이름은 제외 — 멤버 0이 '나' 대신 닉네임일 수 있어 자기 자신이 친구 칩으로 뜨는 것 방지. */
 export async function getRecentMembersAction(): Promise<string[]> {
   const user = await getAuthUser()
   if (!user) return []
-  return listRecentMemberNames(user.id)
+  const names = await listRecentMemberNames(user.id)
+  const me = resolveDisplayName(user)
+  return me ? names.filter((n) => n !== me) : names
 }
 
 export const saveAccountAction = withRateLimit(async (raw: unknown): Promise<AccountResult> => {
@@ -230,6 +234,22 @@ export const deleteMemberGroupAction = withRateLimit(async (raw: unknown): Promi
   await deleteMemberGroup(user.id, id)
   return { ok: true }
 })
+
+// ── 프로필 닉네임(표시 이름) ─────────────────────────────────────────
+// user_metadata.display_name에 저장(provider가 안 건드리는 커스텀 키). 인증 세션 클라로 본인 것만 변경.
+// 데이터(service_role)가 아니라 auth 경계(getSupabaseAuth)를 통해 쓴다 — 세션 쿠키로 인증.
+export const updateNicknameAction = withRateLimit(
+  async (raw: unknown): Promise<{ ok: true } | { ok: false; needLogin?: true; error?: string }> => {
+    const user = await getAuthUser()
+    if (!user) return { ok: false, needLogin: true }
+    const { name } = updateNicknameSchema.parse(raw)
+    const supa = await getSupabaseAuth()
+    const { error } = await supa.auth.updateUser({ data: { display_name: name } })
+    if (error) return { ok: false, error: '이름을 바꾸지 못했어요' }
+    revalidatePath('/my')
+    return { ok: true }
+  },
+)
 
 // ── 공유 정산 페이지 송금완료(무로그인 공개 write) ─────────────────
 // 보기는 무로그인이라 이 두 액션도 로그인 없이 호출됨 → withRateLimit + zod 필수(하드룰 6).

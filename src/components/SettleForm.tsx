@@ -70,9 +70,11 @@ function inlineFrom(account: SettleFormInitial['account']): InlineAcct {
 export function SettleForm({
   initial,
   isLoggedIn = false,
+  myName,
 }: {
   initial?: SettleFormInitial
   isLoggedIn?: boolean
+  myName?: string
 }) {
   const router = useRouter()
   const isEdit = !!initial
@@ -82,7 +84,9 @@ export function SettleForm({
   const [mode, setMode] = useState<SettleMode>(initShoot ? 'shoot' : (initial?.mode ?? 'quick'))
   // 공유 입력
   const [title, setTitle] = useState<string>(initial?.title ?? TITLES.quick) // 정산 제목(기본=모드명, 수정 가능)
-  const [members, setMembers] = useState<string[]>(initial?.members ?? ['나', ''])
+  // '내 이름' 기본값 = 로그인 표시 이름(닉네임). 멤버 길이 한도(20) 넘으면 '나'로 안전 폴백.
+  const selfDefault = myName && myName.trim() && myName.trim().length <= 20 ? myName.trim() : '나'
+  const [members, setMembers] = useState<string[]>(initial?.members ?? [selfDefault, ''])
   const [payerIndex, setPayerIndex] = useState(initial?.payerIndex ?? 0)
   const [winnerIndex, setWinnerIndex] = useState<number | null>(initial?.winnerIndex ?? null) // 다 쏠 사람(members 인덱스)
   // 반올림은 저장 안 됨(계산된 분담만 있음) → 수정도 '안 함'으로 시작, 필요하면 다시 고름(ADR-022).

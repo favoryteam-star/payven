@@ -1,11 +1,12 @@
 import Link from 'next/link'
-import { getAuthUser } from '@/server/auth'
+import { getAuthUser, resolveDisplayName } from '@/server/auth'
 import { listMemberGroups, listUserAccounts } from '@/server/queries'
 import { IcoUser } from '@/components/icons'
 import { LoginButtons } from '@/components/LoginButtons'
 import { ThemeSwitch } from '@/components/ThemeToggle'
 import { AccountManager } from './_components/AccountManager'
 import { MemberGroupManager } from './_components/MemberGroupManager'
+import { NicknameEditor } from './_components/NicknameEditor'
 
 // 화면 테마 설정 행(로그인/비로그인 공통). 스위치는 클라이언트(ThemeSwitch).
 function ThemeSetting() {
@@ -43,13 +44,7 @@ export default async function MyPage() {
       listUserAccounts(user.id),
       listMemberGroups(user.id),
     ])
-    const meta = user.user_metadata ?? {}
-    const name =
-      (meta.name as string) ||
-      (meta.full_name as string) ||
-      (meta.user_name as string) ||
-      (meta.nickname as string) ||
-      '사용자'
+    const name = resolveDisplayName(user) ?? '사용자'
     // 로그인 출처 표시 — Supabase가 OAuth 로그인 시 app_metadata.provider에 채운다.
     const provider = user.app_metadata?.provider
     const providerLabel =
@@ -62,7 +57,7 @@ export default async function MyPage() {
             <IcoUser className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold">{name}</p>
+            <NicknameEditor initialName={name} />
             <p className="text-sm text-neutral-400">{providerLabel}</p>
           </div>
         </div>
