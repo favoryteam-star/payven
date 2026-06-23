@@ -89,6 +89,7 @@ export function SettleForm({
   const [unit, setUnit] = useState(1) // 반올림 단위(1=안 함)
   const [absorberIndex, setAbsorberIndex] = useState<number | null>(null) // 남는 금액 받을 사람(members 인덱스)
   const [gameOpen, setGameOpen] = useState(false) // '게임으로 정하기' 모달(돌림판/사다리, 흡수자·쏘기 공용)
+  const [itemGame, setItemGame] = useState<{ r: number; ii: number } | null>(null) // 항목별 '한 명이 쏘기' 게임 대상(차수 r·메뉴 ii)
   const [eventDate, setEventDate] = useState(initial?.eventDate ?? '') // 정산 날짜(YYYY-MM-DD). 비면 마운트 시 오늘로.
   // 1/N 전용
   const [amount, setAmount] = useState(initial?.amount ?? 0)
@@ -427,6 +428,7 @@ export function SettleForm({
     if (m === 'items')
       setRounds((p) => (p.length ? p : [{ payer: 0, split: true, items: [{ name: '', amount: 0, among: allAmong() }] }]))
     setGameOpen(false)
+    setItemGame(null)
     setMode(m)
   }
 
@@ -530,23 +532,60 @@ export function SettleForm({
   const amountBtnCls =
     'num shrink-0 min-w-[88px] rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-center text-[15px] font-semibold tabular-nums dark:border-neutral-700 dark:bg-neutral-950'
 
-  // 참여 칩 한 줄(메뉴/총액 공용)
-  const amongRow = (r: number, ii: number, it: RoundItem) =>
-    filledIdx.length >= 1 ? (
-      <div className="mt-2.5 flex flex-wrap items-center gap-2" role="group" aria-label="참여 인원">
-        <span className="w-10 shrink-0 text-xs text-neutral-500 dark:text-neutral-400">참여</span>
-        {filledIdx.map((fi) => (
+  // 참여 칩 한 줄(메뉴/총액 공용) + '한 명이 쏘기'(참여자 중 한 명이 그 항목 전액 — 게임/직접).
+  // 참여자를 한 명만 두면 그 사람이 전액 = 쏘기(엔진 그대로). 단순 차수=자리별 쏘기(#1), 메뉴=메뉴별 쏘기(#3) 둘 다 커버.
+  const amongRow = (r: number, ii: number, it: RoundItem) => {
+    if (filledIdx.length < 1) return null
+    const participants = filledIdx.filter((fi) => it.among[fi])
+    return (
+      <div className="mt-2.5">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="참여 인원">
+          <span className="w-10 shrink-0 text-xs text-neutral-500 dark:text-neutral-400">참여</span>
+          {filledIdx.map((fi) => (
+            <button
+              key={fi}
+              onClick={() => toggleItemAmong(r, ii, fi)}
+              aria-pressed={it.among[fi]}
+              className={partChip(it.among[fi])}
+            >
+              {members[fi].trim()}
+            </button>
+          ))}
+        </div>
+        {participants.length === 1 ? (
+          <p className="mt-1.5 pl-12 text-xs font-medium text-brand-700 dark:text-brand">
+            {members[participants[0]].trim()}님이 이거 다 쏴요 💸{' '}
+            <span className="font-normal text-neutral-400 dark:text-neutral-500">(참여 다시 누르면 나눠 내기)</span>
+          </p>
+        ) : (
           <button
-            key={fi}
-            onClick={() => toggleItemAmong(r, ii, fi)}
-            aria-pressed={it.among[fi]}
-            className={partChip(it.among[fi])}
+            type="button"
+            onClick={() => setItemGame({ r, ii })}
+            className="ml-12 mt-1.5 text-xs font-medium text-brand-700 underline-offset-2 hover:underline dark:text-brand"
           >
-            {members[fi].trim()}
+            🎲 한 명이 쏘기
           </button>
-        ))}
+        )}
+        {itemGame?.r === r && itemGame?.ii === ii && (
+          <AbsorberGame
+            candidates={participants.map((fi) => ({ index: fi, name: members[fi].trim() }))}
+            prompt={
+              <>
+                {it.amount > 0 ? (
+                  <span className="num font-semibold text-brand-700 dark:text-brand">{formatWon(it.amount)}</span>
+                ) : (
+                  '이거'
+                )}{' '}
+                누가 쏠지! 💸
+              </>
+            }
+            onPick={(idx) => patchItem(r, ii, { among: members.map((_, k) => k === idx) })}
+            onClose={() => setItemGame(null)}
+          />
+        )}
       </div>
-    ) : null
+    )
+  }
 
   // 참여자(공유) — 항목별은 차수 위에, 1/N·쏘기는 금액 아래에 위치(아래 렌더 순서로 분기). 한 번만 렌더됨.
   const membersSection = (

@@ -288,4 +288,12 @@
 - **구조(user_accounts 미러링):** server/queries(`listMemberGroups`/`create`/`update`/`delete`)·validation(`memberGroupFieldsSchema` label≤20·names 1~30·각≤20·중복제거 transform)·actions(읽기 `getMyMemberGroupsAction` + 쓰기 `save`/`update`/`deleteMemberGroupAction` = withRateLimit+zod+로그인, 하드룰6)·마이 탭 `MemberGroupManager`(추가/수정/삭제)·`useMyMemberGroups` 훅(refresh 포함).
 - **만들기 폼(SettleForm) 통합:** ①"내 모임" **칩 탭 → 멤버 전원 추가**(`addMemberNames`: 빈 칸 먼저 채우고 모자라면 덧붙임 + 차수 among 동기화, 이미 있는 이름 skip, 다 든 모임은 칩 숨김) ②**"현재 멤버 저장"**(로그인 시, '나' 빼고 친구만, 베스트에포트). 로그인 신호는 서버(홈·edit)에서 `isLoggedIn` prop으로(모임=로그인 기능 → 홈 `getAuthUser`로 Dynamic 전환).
 - **검증:** tsc·test **69**(도메인 불변)·lint·build(server-only 누수 0)·**RLS on/정책0/REVOKE 카탈로그 확인** + 프리뷰 비로그인 무회귀(홈·마이 정상·콘솔0·모임 UI 비로그인 숨김 정상). 실DB CRUD e2e는 **오토모드가 프로덕션 실유저 테스트쓰기 차단** → 미실행(쿼리는 검증된 user_accounts 패턴 동형·owner 스코프 `.eq(user_id).eq(id)`). **잔여(폰 스모크): 로그인 후 모임 CRUD·칩 전원추가·현재멤버저장**(OAuth 게이트).
-- **상태:** 확정·검증(라이브 배포 대기 — 키 롤과 같은 배포에 실음). 마이그레이션 0013(원격 적용됨).
+- **상태:** 확정·라이브(`616c42c`). 마이그레이션 0013(원격 적용됨).
+
+### ADR-036 — 항목별 × 쏘기(항목마다 '한 명이 쏘기') ([[ADR-034]] 쏘기 × [[ADR-025]] 항목별)
+- **맥락(사용자 2026-06-23, 출시 직전 "진짜 마지막"):** 쏘기([[ADR-034]])는 금액 하나·한 명 전액(별도 모드), 항목별([[ADR-025]])은 차수/메뉴 나눔. "쏘기에서 항목별도" 요청 → 질문 후 **자리(차수)별 쏘기(#1) + 메뉴별 쏘기(#3) 둘 다** 결정.
+- **핵심 통찰 = 한 가지로 합쳐짐:** "한 명이 쏘기" = 그 항목 **참여자(among)를 한 명만** 두는 것. `splitByWeights`가 단일 참여자에게 전액 → 그 사람이 차수 낸 사람에게 빚짐(쏘기와 동일 net). **단순 차수**(총액 1항목)를 한 명이 쏘면 #1, **메뉴**를 한 명이 쏘면 #3 — 둘 다 같은 항목 단위 동작.
+- **구현 = `amongRow`(메뉴/총액 공용 참여칩 헬퍼)에 "🎲 한 명이 쏘기" 하나 추가.** 참여자 ≥2면 버튼 노출 → `AbsorberGame`([[ADR-016]]/034 범용 컴포넌트, 후보=현재 참여자, prompt "{금액} 누가 쏠지! 💸")로 한 명 뽑아 `among=[winner]`. 참여자 1명이면 "{이름}님이 이거 다 쏴요 💸 (참여 다시 누르면 나눠 내기)" 힌트. 단순/메뉴 둘 다 `amongRow` 한 함수라 한 번에 커버.
+- **변경 0:** 스키마·도메인·RPC·validation(항목 참여자 min 1 충족)·제출(among→participants 그대로)·`getEditableGroup`(1-share 항목→among 1명 자연 복원) **전부 무변경**, SettleForm UI만(`itemGame` 상태 + amongRow + switchMode 리셋).
+- **검증:** tsc·test 69·lint·build + 프리뷰 e2e(메뉴별: 게임→철수 당첨→확정→among 철수만 collapse+힌트→참여 재선택 복귀 / 자리별: 단순 차수에도 버튼 / 콘솔0). 생성은 로그인 게이트라 폰 스모크 잔여(엔진은 단일 참여자 항목 이미 처리).
+- **상태:** 확정·검증(라이브 배포 대기). 마이그레이션 0(엔진 재사용). **알려진 사소 카피(선택):** `AbsorberGame` 확정 버튼 "철수으로 정하기"(받침 없는 이름엔 '로' — 기존 컴포넌트 카피, ADR-016/034부터 있던 것, 본 변경과 무관).
