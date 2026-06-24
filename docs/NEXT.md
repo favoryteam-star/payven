@@ -207,9 +207,11 @@
 - ✅ **PWABuilder manifest 통과** — SVG 아이콘 제거로 packaging critical 해소(`52f107a`), id/orientation 추가(`732e03e`). "Package For Stores" 활성·"ready for packaging". (SW 경고·스크린샷·categories 등은 선택, 패키징 안 막음.)
 - ✅ **Android 패키지 Download 클릭함**(Package ID `kr.payven.app` 확정·새 서명키) → **zip 받음**(.aab·.apk·signing.keystore·signing-key-info.txt·assetlinks.json·next-steps).
 
+**✅ 2026-06-24 (이어서) 완료:**
+- **단계 1 — keystore 백업 완료.** zip 통째로 Google Drive(이 PC 밖) + `Documents\payven 서명키 백업 (삭제금지)\`(로컬, ★먼저읽기 메모 동봉) 2겹. Gmail은 zip 속 `.apk`를 보안차단 → keystore·info·assetlinks·readme만 담은 작은 zip(`payven-keystore-백업(Gmail용).zip`)도 같은 폴더에 생성해둠(필요시 메일용). keystore SHA-256 = `c006c32e890221a33f33e4a6f51525c7c1bf8d7563196996ba5f74711c05e439`.
+- **단계 2 — assetlinks 라우트 생성·배포 완료.** `public/.well-known/assetlinks.json`(정적 파일, server-only 아님) — package `kr.payven.app` + **업로드키 지문 1개**(`E5:BB:FA:...:1D:48`). Route Handler 안 씀(하드룰#6 준수). `src/middleware.ts` matcher에 `\.well-known` 제외 추가(공개 검증 엔드포인트에 세션갱신/쿠키 안 씀). dev 검증 = `/.well-known/assetlinks.json` → **200 · `application/json`** OK, build green. TWA 대상 호스트는 APK `resources.arsc`에서 `https://payven.kr`(apex)·manifest `https://payven.kr/manifest.webmanifest` 확인.
+
 **▶ 다음 세션 첫 할 일(순서대로):**
-1. (사용자) zip의 **`signing.keystore` + `signing-key-info.txt`(비번/alias) 백업** — 잃으면 앱 업데이트 영영 불가. (제일 중요)
-2. (사용자→나) zip 안 **`assetlinks.json` 내용/SHA-256 지문**을 주면 → 내가 **`payven.kr/.well-known/assetlinks.json` 라우트 생성**. 구현=`public/.well-known/assetlinks.json` 파일 + `next.config.mjs` headers에 그 경로 `Content-Type: application/json`(또는 app route handler). **이건 브라우저 안전 정적 파일 — server-only 아님.** 업로드 키 지문 1개로 시작.
 3. (사용자) **D-U-N-S 번호 메일 오면** → [D&B lookup](https://www.dnb.com/en-us/smb/duns/duns-lookup.html)에서 이름·주소가 증명서랑 같은지 확인 → **Play Organization 계정 생성**($25, 조직명 `makersbridge`·영문 주소 3중 일치·웹사이트 payven.kr·**새 결제 프로필**). 조직 계정 = 테스터 12명 게이트 면제.
 4. (사용자) **.aab Play 업로드** → Play Console → Release → Setup → **App integrity → App signing key certificate의 SHA-256** 복사.
 5. (나) 그 **Play 앱서명 지문을 assetlinks에 추가**(지문 2개: 업로드 키 + Play 서명 키) → 재배포. ⚠️ 안 넣으면 프로덕션 앱에 주소창 노출.

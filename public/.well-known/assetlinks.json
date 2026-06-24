@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "kr.payven.app",
+      "sha256_cert_fingerprints": [
+        "E5:BB:FA:79:D0:C1:F4:4B:00:B1:57:ED:EF:FF:12:C5:BD:18:C2:55:61:76:C0:A6:A7:EE:43:64:86:6B:1D:48"
+      ]
+    }
+  }
+]

@@ -35,8 +35,8 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // 정적/이미지/PWA 자산 제외하고 페이지·라우트에만 적용.
+  // 정적/이미지/PWA 자산 + .well-known(앱링크 검증 등 공개 엔드포인트) 제외하고 페이지·라우트에만 적용.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|sw.js|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|sw.js|\\.well-known|.*\\.(?:png|jpg|jpeg|svg|webp)$).*)',
   ],
 }
