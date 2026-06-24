@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>페이븐 — Play 피처 그래픽 1024×500</title>
+<style>
+  body { margin:0; background:#0b0f0d; color:#e8e8e8; font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif; display:flex; flex-direction:column; align-items:center; gap:20px; padding:32px 16px; }
+  h1 { font-size:16px; font-weight:600; color:#9aa0a6; margin:0; }
+  .frame { width:100%; max-width:1024px; box-shadow:0 8px 40px rgba(0,0,0,.5); border-radius:8px; overflow:hidden; }
+  svg { display:block; width:100%; height:auto; }
+  button { background:#0FA177; color:#fff; border:0; border-radius:12px; padding:14px 24px; font-size:15px; font-weight:700; cursor:pointer; }
+  button:active { transform:scale(.97); }
+  p { font-size:13px; color:#80868b; margin:0; text-align:center; max-width:560px; line-height:1.6; }
+</style>
+</head>
+<body>
+  <h1>Google Play 피처 그래픽 — 1024 × 500</h1>
+  <div class="frame">
+    <!-- 정확히 1024×500. 이 SVG를 그대로 PNG로 래스터화해 다운로드한다. -->
+    <svg id="fg" width="1024" height="500" viewBox="0 0 1024 500" xmlns="http://www.w3.org/2000/svg"
+         font-family="Pretendard,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#12B98C" />
+          <stop offset="1" stop-color="#0A7A5C" />
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="500" fill="url(#bg)" />
+      <!-- 우측 큰 '=' 모티프(은은하게) -->
+      <g opacity="0.10" fill="#ffffff">
+        <rect x="610" y="168" width="470" height="48" rx="24" />
+        <rect x="610" y="286" width="470" height="48" rx="24" />
+      </g>
+      <!-- 브랜드 마크: 둥근 사각 + 흰 '='(이븐바) -->
+      <g transform="translate(86,170)">
+        <rect width="160" height="160" rx="44" fill="#ffffff" opacity="0.16" />
+        <rect x="42" y="58" width="76" height="17" rx="8.5" fill="#ffffff" />
+        <rect x="42" y="89" width="76" height="17" rx="8.5" fill="#ffffff" />
+      </g>
+      <!-- 워드마크 + 카피 -->
+      <text x="296" y="226" fill="#ffffff" font-size="96" font-weight="800" letter-spacing="-3">페이븐</text>
+      <text x="299" y="296" fill="#ffffff" font-size="40" font-weight="700">복잡한 정산도, 링크 하나로</text>
+      <text x="300" y="348" fill="#E6FFF4" font-size="26" font-weight="500" opacity="0.92">안 마신 술값 · 메뉴별 · 차수별 더치페이 계산기</text>
+      <text x="300" y="432" fill="#ffffff" font-size="24" font-weight="600" opacity="0.72">payven.kr</text>
+    </svg>
+  </div>
+  <button id="dl">PNG로 저장 (1024×500)</button>
+  <p>버튼을 누르면 정확히 1024×500 PNG가 다운로드됩니다. 그 파일을 Play Console "스토어 등록정보 &gt; 그래픽 &gt; 그래픽 이미지"에 업로드하세요. 글자·색을 바꾸고 싶으면 이 파일의 SVG 텍스트만 고치면 됩니다.</p>
+<script>
+  document.getElementById('dl').addEventListener('click', function () {
+    var svg = document.getElementById('fg');
+    var xml = new XMLSerializer().serializeToString(svg);
+    var url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+    var img = new Image();
+    img.onload = function () {
+      var c = document.createElement('canvas');
+      c.width = 1024; c.height = 500;
+      var ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, 1024, 500);
+      c.toBlob(function (blob) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'payven-feature-graphic-1024x500.png';
+        document.body.appendChild(a); a.click(); a.remove();
+      }, 'image/png');
+    };
+    img.src = url;
+  });
+</script>
+</body>
+</html>

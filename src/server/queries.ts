@@ -906,3 +906,14 @@ export async function deleteMemberGroup(userId: string, id: string): Promise<voi
     .eq('id', id)
   if (error) throw new Error(error.message)
 }
+
+// ── 계정 삭제(개인정보 파기) ───────────────────────────────────────────
+// auth 유저를 지우면 FK 규칙으로: user_accounts·member_groups = on delete cascade(함께 삭제),
+// groups.owner_id = on delete set null(공유 정산은 남되 신원 분리 — 링크 가진 친구는 계속 봄).
+// 따라서 개인정보(이메일·이름·프로필·저장계좌·내 모임)만 제거된다. 정산 자체 삭제는 내역 탭에서 건별로.
+// admin.deleteUser는 본인 id로만 호출(액션이 세션 user.id 전달) → 남의 계정 삭제 불가.
+export async function deleteMyAccount(userId: string): Promise<{ ok: boolean }> {
+  const supa = getAdminClient()
+  const { error } = await supa.auth.admin.deleteUser(userId)
+  return { ok: !error }
+}

@@ -210,6 +210,7 @@
 **✅ 2026-06-24 (이어서) 완료:**
 - **단계 1 — keystore 백업 완료.** zip 통째로 Google Drive(이 PC 밖) + `Documents\payven 서명키 백업 (삭제금지)\`(로컬, ★먼저읽기 메모 동봉) 2겹. Gmail은 zip 속 `.apk`를 보안차단 → keystore·info·assetlinks·readme만 담은 작은 zip(`payven-keystore-백업(Gmail용).zip`)도 같은 폴더에 생성해둠(필요시 메일용). keystore SHA-256 = `c006c32e890221a33f33e4a6f51525c7c1bf8d7563196996ba5f74711c05e439`.
 - **단계 2 — assetlinks 라우트 생성·배포 완료.** `public/.well-known/assetlinks.json`(정적 파일, server-only 아님) — package `kr.payven.app` + **업로드키 지문 1개**(`E5:BB:FA:...:1D:48`). Route Handler 안 씀(하드룰#6 준수). `src/middleware.ts` matcher에 `\.well-known` 제외 추가(공개 검증 엔드포인트에 세션갱신/쿠키 안 씀). dev 검증 = `/.well-known/assetlinks.json` → **200 · `application/json`** OK, build green. TWA 대상 호스트는 APK `resources.arsc`에서 `https://payven.kr`(apex)·manifest `https://payven.kr/manifest.webmanifest` 확인.
+- **D-U-N-S 대기 중 Play 제출 준비 3종:** ① `docs/play-store-listing.md`(앱이름·짧은/자세한 설명·카테고리·데이터보안 양식·콘텐츠등급 복붙 시트). ② **계정 삭제 경로 구현**(마이 탭 "계정 삭제" 2단계 — `deleteMyAccountAction`→auth 유저 삭제로 개인정보 제거+공유정산 비식별화; FK가 user_accounts·member_groups cascade·groups.owner_id set null; build/lint/test green; **로그인 폰 스모크 잔여**, 실삭제라 버리는 계정으로). ③ **피처 그래픽** `store-assets/feature-graphic.html`(열고 'PNG로 저장'→1024×500 PNG). 스크린샷은 폰에서 payven.kr 직접 캡처(레시피=listing §6-3).
 
 **▶ 다음 세션 첫 할 일(순서대로):**
 3. (사용자) **D-U-N-S 번호 메일 오면** → [D&B lookup](https://www.dnb.com/en-us/smb/duns/duns-lookup.html)에서 이름·주소가 증명서랑 같은지 확인 → **Play Organization 계정 생성**($25, 조직명 `makersbridge`·영문 주소 3중 일치·웹사이트 payven.kr·**새 결제 프로필**). 조직 계정 = 테스터 12명 게이트 면제.

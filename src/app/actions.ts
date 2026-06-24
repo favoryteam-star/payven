@@ -5,6 +5,7 @@ import { withRateLimit } from '@/server/ratelimit'
 import {
   accountIdSchema,
   deleteGroupSchema,
+  deleteMyAccountSchema,
   itemizedBillSchema,
   markSentSchema,
   memberGroupFieldsSchema,
@@ -28,6 +29,7 @@ import {
   createUserAccount,
   deleteGroup,
   deleteMemberGroup,
+  deleteMyAccount,
   deleteUserAccount,
   listMemberGroups,
   listRecentMemberNames,
@@ -246,6 +248,28 @@ export const updateNicknameAction = withRateLimit(
     const supa = await getSupabaseAuth()
     const { error } = await supa.auth.updateUser({ data: { display_name: name } })
     if (error) return { ok: false, error: '이름을 바꾸지 못했어요' }
+    revalidatePath('/my')
+    return { ok: true }
+  },
+)
+
+// ── 계정·데이터 삭제 (로그인 필수, 본인만) ───────────────────────────
+// 개인정보 파기: auth 유저 삭제 → 저장계좌·내 모임 cascade, 공유 정산은 owner null(비식별화).
+// 세션 user.id만 삭제 → 남의 계정 못 지움. 삭제 후 세션 쿠키 정리(베스트에포트). 공개 write라 하드룰 6 적용.
+export const deleteMyAccountAction = withRateLimit(
+  async (raw: unknown): Promise<{ ok: true } | { ok: false; needLogin?: true; error?: string }> => {
+    const user = await getAuthUser()
+    if (!user) return { ok: false, needLogin: true }
+    deleteMyAccountSchema.parse(raw)
+    const res = await deleteMyAccount(user.id)
+    if (!res.ok) return { ok: false, error: '계정을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.' }
+    // 유저가 이미 삭제됐으므로 토큰은 무효 — 쿠키만 비운다(실패해도 무시).
+    try {
+      const supa = await getSupabaseAuth()
+      await supa.auth.signOut()
+    } catch {
+      // 세션 정리 실패는 삭제 결과에 영향 없음
+    }
     revalidatePath('/my')
     return { ok: true }
   },

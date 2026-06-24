@@ -62,6 +62,9 @@ export const updateNicknameSchema = z.object({
 })
 export type UpdateNicknameInput = z.infer<typeof updateNicknameSchema>
 
+// 계정 삭제 — 명시적 확인(confirm:true)만 받는다. 본인 계정만 삭제(액션이 세션 user.id 사용).
+export const deleteMyAccountSchema = z.object({ confirm: z.literal(true) })
+
 // 반올림 단위(보조단위 없는 정수 원). 1=현행(자동), 10/100/1000=단위로 내림 후 남는 금액 흡수자에게.
 export const roundUnitSchema = z
   .union([z.literal(1), z.literal(10), z.literal(100), z.literal(1000)])

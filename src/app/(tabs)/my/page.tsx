@@ -5,6 +5,7 @@ import { IcoUser } from '@/components/icons'
 import { LoginButtons } from '@/components/LoginButtons'
 import { ThemeSwitch } from '@/components/ThemeToggle'
 import { AccountManager } from './_components/AccountManager'
+import { DeleteAccount } from './_components/DeleteAccount'
 import { MemberGroupManager } from './_components/MemberGroupManager'
 import { NicknameEditor } from './_components/NicknameEditor'
 
@@ -71,6 +72,8 @@ export default async function MyPage() {
             로그아웃
           </button>
         </form>
+
+        <DeleteAccount />
 
         <LegalFooter />
       </main>
