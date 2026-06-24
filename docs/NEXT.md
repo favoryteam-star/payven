@@ -193,7 +193,34 @@
 - **검증:** `tsc`·test **69**(쏘기 net/전액/자기쏘기 불변식 +3)·lint·build + **프리뷰 e2e**(모드 칩→picker→게임→결과 "철수님이 30,000원 다 쏴요 → 나님에게" / 자기쏘기 "본인이 냈으니 정산할 게 없어요" / 단위·흡수자 섹션 숨김; 비교 중 토글 방식도 동일 검증). **8에이전트 적대리뷰(money/하드룰/엣지 3렌즈→검증): 확정 실결함 0**(2건은 위 무해 휴리스틱, 13건 정확 확인). 생성/수정 RPC 0-share 허용 확인.
 - **잔여:** 로그인 생성→정산결과 금액 폰 스모크(OAuth라 자동검증 불가).
 
-## ▶ 다음 세션 시작점 (2026-06-23 마감 — 기능 전부 완료·폰 확인 끝. 다음 = ②키롤 → ③앱스토어 = 출시 작업)
+## ▶ 다음 세션 시작점
+
+**▶▶▶ 2026-06-24 마감 현황 — Android 출시 진행 중 (clear 후 여기부터, 이게 최신):**
+
+> 이번 세션 한 일: 내 모임·항목별쏘기·닉네임 라이브 + 🔑키롤 스킵(검증=노출0) + iOS 사전조사(LAUNCH 트랙3) + **경쟁분석** + **Android 패키징 시작**.
+
+**🧭 전략 결정(경쟁분석 후 — 중요):** 일반 대중은 카톡/토스 두고 "그냥 N빵"으론 **안 씀**(2026.1 카카오뱅크 '빵나누기'까지 등장해 무가입 링크 차별점도 깎임). payven 진짜 강점 = **복잡·비대칭 정산**(안 마신 술값·메뉴별·여러 차수) — 카톡/토스가 메뉴 자동배분 못 함. → **포지셔닝 = "복잡 정산 계산기"(N빵 앱 아님)** + 카톡 보완재(계산→결과 카톡 복붙) + 유통=SEO/검색("더치페이 계산기"·"여행 경비 정산"). **iOS는 보류**(무거움 — 웹+안드로 "복잡 정산기" 수요 검증 후 결정). 일반 대중 미사용 확신 80%+, 좁은 틈새 생존 40%대.
+
+**📱 Android 출시 진행 상태:**
+- ✅ 홈택스 **영문 사업자등록증명** 발급: 상호 `makersbridge` · 대표 `NAHEEJIN`(나희진) · 주소 `74 Geulpo 2-ro, Gimpo-si, Gyeonggi-do, Republic of Korea` · 사업자 675-76-00551 · 간이과세자. (이 영문 상호·주소를 D-U-N-S·Play에 글자 그대로 복붙 = 3중 일치)
+- ✅ **D-U-N-S 신청 제출**(애플 무료폼 developer.apple.com/enroll/duns-lookup, 법인명 makersbridge·payven.kr·sole proprietorship). 접수확인 메일 옴(Tracking# 10505883 · Case# 10571821 · Request Key 34N7L2RU64). **⏳ 실제 D-U-N-S 번호 메일 대기**(별도 메일, 1~5영업일, 스팸함도 확인).
+- ✅ **PWABuilder manifest 통과** — SVG 아이콘 제거로 packaging critical 해소(`52f107a`), id/orientation 추가(`732e03e`). "Package For Stores" 활성·"ready for packaging". (SW 경고·스크린샷·categories 등은 선택, 패키징 안 막음.)
+- ✅ **Android 패키지 Download 클릭함**(Package ID `kr.payven.app` 확정·새 서명키) → **zip 받음**(.aab·.apk·signing.keystore·signing-key-info.txt·assetlinks.json·next-steps).
+
+**▶ 다음 세션 첫 할 일(순서대로):**
+1. (사용자) zip의 **`signing.keystore` + `signing-key-info.txt`(비번/alias) 백업** — 잃으면 앱 업데이트 영영 불가. (제일 중요)
+2. (사용자→나) zip 안 **`assetlinks.json` 내용/SHA-256 지문**을 주면 → 내가 **`payven.kr/.well-known/assetlinks.json` 라우트 생성**. 구현=`public/.well-known/assetlinks.json` 파일 + `next.config.mjs` headers에 그 경로 `Content-Type: application/json`(또는 app route handler). **이건 브라우저 안전 정적 파일 — server-only 아님.** 업로드 키 지문 1개로 시작.
+3. (사용자) **D-U-N-S 번호 메일 오면** → [D&B lookup](https://www.dnb.com/en-us/smb/duns/duns-lookup.html)에서 이름·주소가 증명서랑 같은지 확인 → **Play Organization 계정 생성**($25, 조직명 `makersbridge`·영문 주소 3중 일치·웹사이트 payven.kr·**새 결제 프로필**). 조직 계정 = 테스터 12명 게이트 면제.
+4. (사용자) **.aab Play 업로드** → Play Console → Release → Setup → **App integrity → App signing key certificate의 SHA-256** 복사.
+5. (나) 그 **Play 앱서명 지문을 assetlinks에 추가**(지문 2개: 업로드 키 + Play 서명 키) → 재배포. ⚠️ 안 넣으면 프로덕션 앱에 주소창 노출.
+6. 테스트 기기에서 **주소창 사라짐 확인** → **프로덕션 제출** 🚀
+
+**📌 파킹(출시 후):** 항목별 입력 무게 완화(A=기본 간단+C=참여 프리셋)·결제문자 붙여넣기 파싱. 자동 계좌/카드 내역연동=스코프 밖(라이선스급). (아래 "📌 출시 후 개선 후보" 참조.)
+**🍎 iOS(나중, 보류):** LAUNCH **트랙 3** 참조 — Apple=Individual 계정(D-U-N-S 불필요·Play용과 별개)·**4.8 Sign in with Apple + 5.1.1 인앱 계정삭제 선구현 필수**·OAuth 서버 교환.
+
+---
+
+## ▶ 다음 세션 시작점 (2026-06-23 마감 — 기능 전부 완료·폰 확인 끝 / 키롤·앱스토어는 위 2026-06-24 현황으로 대체됨)
 
 > **세션 마감 상태:** 게임 B '쏘기' + 하단 CTA 폴리시 + 항목별 순서까지 전부 라이브(`a278c4e`), **사용자 폰 확인 완료("폰화면은 확인했고")**. 기능 개발은 사실상 끝. 사용자가 "②③은 다음 세션에 clear 후 시작"으로 결정 → **다음 세션은 키롤부터.**
 
