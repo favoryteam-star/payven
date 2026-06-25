@@ -1103,7 +1103,11 @@ export function SettleForm({
                                 className="fixed inset-0 z-10 cursor-default"
                               />
                               <div className="absolute left-1 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-                                <label className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                                {/* 옵션 탭 = 즉시 닫기. setTimeout(0)이라 label이 파일창을 먼저 연 뒤 닫혀(언마운트 레이스 회피). */}
+                                <label
+                                  onClick={() => setTimeout(() => setOcrMenuRound(null), 0)}
+                                  className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                >
                                   📷 사진 촬영
                                   <input
                                     type="file"
@@ -1113,7 +1117,10 @@ export function SettleForm({
                                     onChange={(e) => handleReceipt(r, e)}
                                   />
                                 </label>
-                                <label className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                                <label
+                                  onClick={() => setTimeout(() => setOcrMenuRound(null), 0)}
+                                  className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                >
                                   🖼 앨범에서 가져오기
                                   <input
                                     type="file"
