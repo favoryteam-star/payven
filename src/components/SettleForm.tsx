@@ -59,6 +59,10 @@ function formatDateDisplay(ymd: string): string {
   return `${y}. ${Number(m)}. ${Number(d)}.`
 }
 
+// 영수증 스캔 버튼(촬영/앨범 공용) pill 스타일. 투명 input 오버레이를 담으려 relative+overflow-hidden.
+const OCR_PILL =
+  'relative inline-flex cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition active:scale-95 hover:border-brand dark:border-brand/40 dark:text-brand'
+
 // 모드별 기본 제목. 정산결과는 이 기본값이면 제목 숨김(직접 바꾸면 표시).
 const TITLES: Record<SettleMode, string> = { quick: '빠른정산', items: '항목별 정산', shoot: '한 명이 쏘기' }
 
@@ -1055,24 +1059,37 @@ export function SettleForm({
                       </div>
                     ))}
                     <div className="flex flex-wrap items-center gap-3 px-1">
-                      {/* 영수증 찍기 — 사진 → 메뉴·금액 자동 채움(Gemini). label로 감싸 파일 피커 열기. */}
-                      <label
-                        className={
-                          'relative inline-flex cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition active:scale-95 hover:border-brand dark:border-brand/40 dark:text-brand ' +
-                          (ocrRound !== null ? 'pointer-events-none opacity-60' : '')
-                        }
-                      >
-                        {ocrRound === r ? '📷 인식 중…' : '📷 영수증 스캔'}
-                        {/* capture 없음 = OS가 '사진 찍기/앨범에서 선택/파일' 모두 제공(촬영·가져오기 둘 다).
-                            display:none 대신 버튼 위에 투명 오버레이로 깔아야 iOS 선택 메뉴가 버튼 위치에 정상 앵커링됨. */}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                          disabled={ocrRound !== null}
-                          onChange={(e) => handleReceipt(r, e)}
-                        />
-                      </label>
+                      {/* 영수증 스캔 — 사진 → 메뉴·금액 자동 채움(Gemini).
+                          촬영/앨범을 버튼 2개로 분리: 안드로이드 13+/TWA는 capture 없으면 갤러리로 직행(카메라 선택지 없음),
+                          capture=environment를 주면 카메라만 열려 갤러리가 사라짐 → 한 input으론 둘 다 보장 불가.
+                          그래서 직접 선택지를 둠. 투명 input을 버튼 위에 오버레이로 깔아야 iOS 메뉴가 버튼 위치에 앵커링됨. */}
+                      {ocrRound === r ? (
+                        <span className={OCR_PILL + ' pointer-events-none opacity-60'}>📷 인식 중…</span>
+                      ) : (
+                        <>
+                          <label className={OCR_PILL + (ocrRound !== null ? ' pointer-events-none opacity-60' : '')}>
+                            📷 촬영
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                              disabled={ocrRound !== null}
+                              onChange={(e) => handleReceipt(r, e)}
+                            />
+                          </label>
+                          <label className={OCR_PILL + (ocrRound !== null ? ' pointer-events-none opacity-60' : '')}>
+                            🖼 앨범
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                              disabled={ocrRound !== null}
+                              onChange={(e) => handleReceipt(r, e)}
+                            />
+                          </label>
+                        </>
+                      )}
                       <button
                         onClick={() => addItemToRound(r)}
                         className="-mx-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"
