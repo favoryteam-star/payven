@@ -1058,16 +1058,17 @@ export function SettleForm({
                       {/* 영수증 찍기 — 사진 → 메뉴·금액 자동 채움(Gemini). label로 감싸 파일 피커 열기. */}
                       <label
                         className={
-                          'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition active:scale-95 hover:border-brand dark:border-brand/40 dark:text-brand ' +
+                          'relative inline-flex cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition active:scale-95 hover:border-brand dark:border-brand/40 dark:text-brand ' +
                           (ocrRound !== null ? 'pointer-events-none opacity-60' : '')
                         }
                       >
                         {ocrRound === r ? '📷 인식 중…' : '📷 영수증 스캔'}
-                        {/* capture 없음 = OS가 '사진 찍기/앨범에서 선택/파일'을 모두 제공(촬영·가져오기 둘 다). */}
+                        {/* capture 없음 = OS가 '사진 찍기/앨범에서 선택/파일' 모두 제공(촬영·가져오기 둘 다).
+                            display:none 대신 버튼 위에 투명 오버레이로 깔아야 iOS 선택 메뉴가 버튼 위치에 정상 앵커링됨. */}
                         <input
                           type="file"
                           accept="image/*"
-                          className="hidden"
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                           disabled={ocrRound !== null}
                           onChange={(e) => handleReceipt(r, e)}
                         />
