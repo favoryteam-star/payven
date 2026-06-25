@@ -18,6 +18,19 @@ export const accountFieldsSchema = z.object({
 
 export type AccountFields = z.infer<typeof accountFieldsSchema>
 
+// 영수증 OCR 입력 — base64 이미지(클라에서 1568px JPEG로 축소해 보냄).
+// 디코드 ~20MB(Gemini inline 한도)까지의 base64 문자열 캡 = 과금·남용 백스톱(실제론 수백 KB).
+export const ocrReceiptSchema = z.object({
+  imageBase64: z
+    .string()
+    .min(1)
+    .max(28_000_000)
+    .regex(/^[A-Za-z0-9+/]+={0,2}$/, '이미지 형식이 올바르지 않아요'),
+  mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+})
+
+export type OcrReceiptInput = z.infer<typeof ocrReceiptSchema>
+
 // 저장 계좌 추가(마이). 별칭·기본여부 포함.
 export const saveAccountSchema = accountFieldsSchema.extend({
   label: z.string().trim().max(20).optional(),

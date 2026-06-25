@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, useTransition, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatWon } from '@/domain/money'
 import { equalSplit } from '@/domain/settle'
 import {
   addItemizedBillAction,
   getRecentMembersAction,
+  ocrReceiptAction,
   quickSettleAction,
   saveMemberGroupAction,
   updateItemizedBillAction,
@@ -104,6 +105,7 @@ export function SettleForm({
     initial?.rounds?.map((r) => ({ payer: r.payer, split: r.items.length > 1, items: r.items })) ?? [],
   )
   const [padTarget, setPadTarget] = useState<{ r: number; i: number } | null>(null) // 메뉴 금액 패드 대상
+  const [ocrRound, setOcrRound] = useState<number | null>(null) // 영수증 인식 중인 차수(로딩 표시)
   // 공통
   const [error, setError] = useState<string | null>(null)
   const [errorField, setErrorField] = useState<string | null>(null) // 에러 소속 섹션(인라인 표시·자동 스크롤)
@@ -405,6 +407,76 @@ export function SettleForm({
         return { ...rd, items: [...rd.items, { name: '', amount: 0, among: base.slice(0, members.length) }] }
       }),
     )
+  // ── 영수증 OCR ── 사진 → (서버) Gemini → {메뉴, 금액} → 차수 r의 메뉴로 채움.
+  // 사진은 1568px JPEG로 축소해 보냄(토큰·전송량 절감). 참여자는 전원 기본(사용자가 조정).
+  const downscaleToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const maxEdge = 1568
+        const scale = Math.min(1, maxEdge / Math.max(img.width, img.height))
+        const w = Math.max(1, Math.round(img.width * scale))
+        const h = Math.max(1, Math.round(img.height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return reject(new Error('canvas'))
+        ctx.drawImage(img, 0, 0, w, h)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        resolve(dataUrl.split(',')[1] ?? '')
+      }
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        reject(new Error('image-load'))
+      }
+      img.src = url
+    })
+
+  const applyOcrLines = (r: number, lines: { name: string; amount: number }[]) => {
+    if (lines.length === 0) return
+    setRounds((p) =>
+      p.map((rd, i) => {
+        if (i !== r) return rd
+        const ocrItems: RoundItem[] = lines.map((l) => ({ name: l.name, amount: l.amount, among: allAmong() }))
+        // 차수가 '빈 시드 한 줄'뿐이면 교체, 아니면 기존 메뉴 뒤에 덧붙임. split은 항상 펼침.
+        const it0 = rd.items[0]
+        const onlySeed = rd.items.length === 1 && it0.amount === 0 && !it0.name.trim()
+        return { ...rd, split: true, items: onlySeed ? ocrItems : [...rd.items, ...ocrItems] }
+      }),
+    )
+  }
+
+  const handleReceipt = async (r: number, e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // 같은 파일 재선택 허용
+    if (!file) return
+    setError(null)
+    setErrorField(null)
+    setOcrRound(r)
+    try {
+      const imageBase64 = await downscaleToBase64(file)
+      const res = await ocrReceiptAction({ imageBase64, mediaType: 'image/jpeg' })
+      if ('needLogin' in res) {
+        setLoginPrompt(true)
+        return
+      }
+      if ('ok' in res && !res.ok) {
+        setError(res.error)
+        setErrorField('rounds')
+        return
+      }
+      if ('lines' in res) applyOcrLines(r, res.lines)
+    } catch {
+      setError('영수증을 처리하지 못했어요. 다시 시도해 주세요.')
+      setErrorField('rounds')
+    } finally {
+      setOcrRound(null)
+    }
+  }
+
   const removeItemFromRound = (r: number, ii: number) => {
     setRounds((p) =>
       p.map((rd, i) => (i === r && rd.items.length > 1 ? { ...rd, items: rd.items.filter((_, k) => k !== ii) } : rd)),
@@ -976,7 +1048,24 @@ export function SettleForm({
                         {amongRow(r, ii, it)}
                       </div>
                     ))}
-                    <div className="flex items-center gap-4 px-1">
+                    <div className="flex flex-wrap items-center gap-3 px-1">
+                      {/* 영수증 찍기 — 사진 → 메뉴·금액 자동 채움(Gemini). label로 감싸 파일 피커 열기. */}
+                      <label
+                        className={
+                          'inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition active:scale-95 hover:border-brand dark:border-brand/40 dark:text-brand ' +
+                          (ocrRound !== null ? 'pointer-events-none opacity-60' : '')
+                        }
+                      >
+                        {ocrRound === r ? '📷 인식 중…' : '📷 영수증 찍기'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          disabled={ocrRound !== null}
+                          onChange={(e) => handleReceipt(r, e)}
+                        />
+                      </label>
                       <button
                         onClick={() => addItemToRound(r)}
                         className="-mx-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"

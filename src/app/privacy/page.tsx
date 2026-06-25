@@ -21,7 +21,7 @@ export default function PrivacyPage() {
           <Wordmark />
         </div>
         <h1 className="mt-4 text-2xl font-bold tracking-tight">개인정보처리방침</h1>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">시행일: 2026년 6월 22일</p>
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">시행일: 2026년 6월 25일</p>
       </div>
 
       <div className="flex flex-col gap-7 text-[15px] leading-relaxed text-neutral-700 dark:text-neutral-300">
@@ -36,6 +36,10 @@ export default function PrivacyPage() {
             <li><strong>로그인 시</strong>(구글 또는 카카오): 이메일 주소, 이름 또는 닉네임, 프로필 이미지.</li>
             <li>
               <strong>정산을 만들 때</strong>: 이용자가 입력한 정산 제목·금액·참여자 이름·받을 계좌(은행/계좌번호/예금주)·날짜.
+            </li>
+            <li>
+              <strong>영수증 사진으로 메뉴를 채울 때</strong>(선택 기능): 이용자가 업로드한 영수증 사진. 메뉴명·금액 자동 인식에만
+              사용되며, 인식 처리 후 서버에 저장하지 않습니다.
             </li>
             <li><strong>자동 수집</strong>: 요청 IP 주소(악용 방지·요청 제한 목적), 일반 접속 로그.</li>
             <li>
@@ -59,6 +63,7 @@ export default function PrivacyPage() {
             <li>정산 데이터는 이용자가 <strong>내역 탭에서 직접 삭제</strong>할 수 있으며, 삭제 시 관련 데이터가 함께 삭제됩니다.</li>
             <li>로그인 계정 정보는 회원 탈퇴 또는 삭제 요청 시 파기합니다.</li>
             <li>요청 제한에 사용되는 IP 정보는 짧은 시간만 임시 저장된 뒤 만료됩니다.</li>
+            <li>업로드한 영수증 사진은 메뉴 인식 처리 직후 폐기되며 서비스에 저장하지 않습니다.</li>
           </ul>
         </section>
 
@@ -70,6 +75,10 @@ export default function PrivacyPage() {
             <li><strong>Vercel</strong> — 웹 호스팅</li>
             <li><strong>Upstash</strong> — 요청 제한(IP 기반)</li>
             <li><strong>Google · Kakao</strong> — 소셜 로그인 인증</li>
+            <li>
+              <strong>Google(Gemini API)</strong> — 영수증 사진의 메뉴·금액 자동 인식. 전송된 사진은 인식 목적으로 처리되며
+              서비스(페이븐)에는 저장하지 않습니다. 사진의 Google 측 처리는 Google의 정책을 따릅니다.
+            </li>
           </ul>
           <p className="mt-2">서비스는 이용자의 개인정보를 위 목적 외 제3자에게 판매하거나 광고 목적으로 제공하지 않습니다.</p>
         </section>

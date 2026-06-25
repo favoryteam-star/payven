@@ -10,6 +10,7 @@ import {
   markSentSchema,
   memberGroupFieldsSchema,
   memberGroupIdSchema,
+  ocrReceiptSchema,
   quickSettleSchema,
   renameGroupSchema,
   saveAccountSchema,
@@ -47,6 +48,7 @@ import {
   type SavedAccount,
 } from '@/server/queries'
 import { getAuthUser, getSupabaseAuth, resolveDisplayName } from '@/server/auth'
+import { parseReceiptImage } from '@/server/ocr'
 
 // 무로그인 공개 write 액션 → withRateLimit + zod 필수(CLAUDE.md 하드룰 6).
 // 만들기 = 로그인 게이트: 미로그인이면 needLogin 신호(클라가 입력값 보존 후 로그인으로). 보기는 무로그인 유지.
@@ -87,6 +89,28 @@ export const addItemizedBillAction = withRateLimit(async (raw: unknown): Promise
   await maybeSaveAccount(user.id, input.account, input.saveAccount)
   return result
 })
+
+// ── 영수증 OCR(로그인 필수 — 유료 비전 API 비용 통제). 사진 → 메뉴+금액. ──
+// 이미지는 저장 안 함(호출 후 버림). 일반 write와 분리된 'ocr' 버킷으로 레이트리밋.
+type OcrResult =
+  | { lines: { name: string; amount: number }[]; total: number }
+  | { needLogin: true }
+  | { ok: false; error: string }
+
+export const ocrReceiptAction = withRateLimit(async (raw: unknown): Promise<OcrResult> => {
+  const user = await getAuthUser()
+  if (!user) return { needLogin: true }
+  const input = ocrReceiptSchema.parse(raw)
+  try {
+    const { lines, total } = await parseReceiptImage(input.imageBase64, input.mediaType)
+    if (lines.length === 0) {
+      return { ok: false, error: '영수증에서 메뉴를 못 읽었어요. 더 밝게·반듯하게 찍어 주세요.' }
+    }
+    return { lines, total }
+  } catch {
+    return { ok: false, error: '영수증 인식에 실패했어요. 잠시 후 다시 시도해 주세요.' }
+  }
+}, 'ocr')
 
 // ── 내역 수정/삭제(로그인 필수, 소유자 본인만) ─────────────────────
 // 수정=교체 RPC가 owner 가드(p_owner_id ↔ groups.owner_id), 삭제=owner_id 스코프 delete.
