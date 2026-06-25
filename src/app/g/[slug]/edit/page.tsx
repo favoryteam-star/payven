@@ -7,6 +7,9 @@ import { SettleForm } from '@/components/SettleForm'
 // 사적 화면(로그인+소유자) — 색인 금지.
 export const metadata: Metadata = { robots: { index: false, follow: false } }
 
+// 영수증 OCR Server Action(Gemini 대기)이 기본 10초에 잘리지 않게 여유(홈 페이지와 동일).
+export const maxDuration = 60
+
 type Params = { params: Promise<{ slug: string }> }
 
 // 정산 수정 = 만들기 폼(SettleForm)을 기존 값으로 시드. 서버에서 소유자 게이트 후 프리필 전달.

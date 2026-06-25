@@ -107,7 +107,8 @@ export const ocrReceiptAction = withRateLimit(async (raw: unknown): Promise<OcrR
       return { ok: false, error: '영수증에서 메뉴를 못 읽었어요. 더 밝게·반듯하게 찍어 주세요.' }
     }
     return { lines, total }
-  } catch {
+  } catch (e) {
+    console.error('[ocr] 인식 실패:', e instanceof Error ? e.message : e)
     return { ok: false, error: '영수증 인식에 실패했어요. 잠시 후 다시 시도해 주세요.' }
   }
 }, 'ocr')

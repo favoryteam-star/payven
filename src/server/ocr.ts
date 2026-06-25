@@ -9,7 +9,8 @@ import { GoogleGenAI, Type } from '@google/genai'
 export type ReceiptLine = { name: string; qty: number; amount: number }
 export type ReceiptParse = { lines: ReceiptLine[]; total: number }
 
-const MODEL = 'gemini-2.5-flash-lite'
+// Flash-Lite 우선(장당 ~₩0.4). 과부하(503/429)로 막히면 Flash로 폴백(용량 여유·정확도↑, 장당 ~₩1.8).
+const MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash']
 
 function getClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY
@@ -48,7 +49,7 @@ const SYSTEM = `너는 한국 음식점 영수증 사진에서 주문 항목을 
 - 메뉴를 하나도 못 읽으면 lines는 빈 배열([])로 둔다. 추측해서 지어내지 말 것.`
 
 // Gemini가 일시적으로 503(과부하)·429·5xx를 줄 때가 있어 짧게 재시도(그 외 에러는 즉시 throw).
-async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
   let lastErr: unknown
   for (let i = 0; i < tries; i++) {
     try {
@@ -57,7 +58,8 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
       lastErr = e
       const status = (e as { status?: number })?.status
       if (status !== 503 && status !== 429 && status !== 500) throw e
-      await new Promise((r) => setTimeout(r, 600 * (i + 1)))
+      console.warn(`[ocr] ${status} 재시도 ${i + 1}/${tries}`)
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, 700 * (i + 1)))
     }
   }
   throw lastErr
@@ -66,9 +68,9 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
 // 영수증 1장 추출. 항상 정수 KRW. 못 읽으면 lines=[].
 export async function parseReceiptImage(imageBase64: string, mediaType: string): Promise<ReceiptParse> {
   const ai = getClient()
-  const res = await withRetry(() =>
+  const request = (model: string) =>
     ai.models.generateContent({
-      model: MODEL,
+      model,
       contents: [
         { inlineData: { mimeType: mediaType, data: imageBase64 } },
         { text: '이 영수증의 메뉴와 금액을 추출해 줘.' },
@@ -79,17 +81,27 @@ export async function parseReceiptImage(imageBase64: string, mediaType: string):
         responseSchema: RESPONSE_SCHEMA,
         temperature: 0,
       },
-    }),
-  )
-  const text = res.text
-  if (!text) return { lines: [], total: 0 }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    return { lines: [], total: 0 }
+    })
+  // Flash-Lite로 시도(재시도 포함). 끝까지 과부하(503/429)면 다음 모델(Flash)로 폴백.
+  let lastErr: unknown
+  for (const model of MODELS) {
+    try {
+      const res = await withRetry(() => request(model))
+      const text = res.text
+      if (!text) return { lines: [], total: 0 }
+      try {
+        return normalize(JSON.parse(text))
+      } catch {
+        return { lines: [], total: 0 }
+      }
+    } catch (e) {
+      lastErr = e
+      const status = (e as { status?: number })?.status
+      if (status !== 503 && status !== 429) throw e // 과부하 외 에러는 모델 바꿔도 소용없음
+      console.warn(`[ocr] ${model} 과부하(${status}) → 다음 모델 폴백`)
+    }
   }
-  return normalize(parsed)
+  throw lastErr
 }
 
 // 모델 응답을 신뢰하지 않고 정수·양수만 통과시킨다.
