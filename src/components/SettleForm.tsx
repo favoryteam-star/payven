@@ -893,17 +893,21 @@ export function SettleForm({
                     </button>
                   </>
                 ) : (
-                  /* 메뉴별로 나눔: 메뉴 리스트 + 메뉴 추가 + 간단히 */
-                  <div className="mt-2.5 flex flex-col gap-2.5 border-l-2 border-neutral-200 pl-3 dark:border-neutral-700">
+                  /* 메뉴별로 나눔: 영수증 카드 리스트(각 메뉴=카드) + 메뉴 추가 + 간단히 */
+                  <div className="mt-2.5 flex flex-col gap-2.5">
                     {rd.items.map((it, ii) => (
-                      <div key={ii}>
-                        <div className="flex items-center gap-2">
+                      <div
+                        key={ii}
+                        className="rounded-2xl border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950"
+                      >
+                        {/* 메뉴 이름 = 카드 제목(테두리 없는 입력) + 삭제 */}
+                        <div className="flex items-center gap-1">
                           <input
                             value={it.name}
                             placeholder={`메뉴 ${ii + 1}`}
                             aria-label={`메뉴 ${ii + 1} 이름`}
                             onChange={(e) => patchItem(r, ii, { name: e.target.value })}
-                            className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[16px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700 dark:bg-neutral-950"
+                            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1 py-1 text-[16px] font-semibold text-neutral-900 outline-none placeholder:font-normal placeholder:text-neutral-400 focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-neutral-50 dark:placeholder:text-neutral-500"
                           />
                           {rd.items.length > 1 && (
                             <button
@@ -915,14 +919,14 @@ export function SettleForm({
                             </button>
                           )}
                         </div>
-                        {/* 단가·수량 항상 표시(영수증 3행). 단가 탭=금액 입력, 합계=단가×수량. */}
+                        {/* 한 줄 영수증: 단가[탭] × 수량 ····· 합계(항상 표시 → 높이 안정, 수량 1이면 단가=합계라 라벨만 숨김) */}
                         <div className="mt-2 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-                            <span className="shrink-0">단가</span>
+                          <div className="flex min-w-0 items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => setPadTarget({ r, i: ii })}
-                              className="num rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium tabular-nums text-neutral-700 transition active:scale-95 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200"
+                              aria-label="단가 입력"
+                              className="num shrink-0 rounded-lg border border-neutral-200 bg-neutral-100 px-2.5 py-1.5 text-sm font-medium tabular-nums text-neutral-700 transition active:scale-95 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
                             >
                               {it.amount > 0 ? (
                                 formatWon(unitOf(it))
@@ -930,10 +934,8 @@ export function SettleForm({
                                 <span className="text-neutral-400 dark:text-neutral-500">금액</span>
                               )}
                             </button>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-                            <span className="shrink-0">수량</span>
-                            <div className="inline-flex items-center rounded-lg border border-neutral-200 dark:border-neutral-700">
+                            <span className="shrink-0 text-xs text-neutral-400 dark:text-neutral-500">×</span>
+                            <div className="inline-flex shrink-0 items-center rounded-lg border border-neutral-200 dark:border-neutral-700">
                               <button
                                 type="button"
                                 onClick={() => changeItemQty(r, ii, itemQty(it) - 1)}
@@ -943,7 +945,7 @@ export function SettleForm({
                               >
                                 −
                               </button>
-                              <span className="num min-w-[1.75rem] text-center text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+                              <span className="num min-w-[1.5rem] text-center text-sm font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
                                 {itemQty(it)}
                               </span>
                               <button
@@ -956,19 +958,25 @@ export function SettleForm({
                               </button>
                             </div>
                           </div>
-                        </div>
-                        {it.amount > 0 && (
-                          <div className="mt-2.5 flex items-baseline justify-between border-t border-neutral-200/70 pt-2.5 dark:border-neutral-700/70">
-                            <span className="text-xs text-neutral-500 dark:text-neutral-400">합계</span>
-                            <span className="num text-[15px] font-bold tabular-nums text-brand-700 dark:text-brand">
-                              {formatWon(it.amount)}
-                            </span>
+                          <div className="flex shrink-0 flex-col items-end leading-tight">
+                            {itemQty(it) > 1 && (
+                              <span className="text-[11px] text-neutral-400 dark:text-neutral-500">합계</span>
+                            )}
+                            {it.amount > 0 ? (
+                              <span className="num text-base font-bold tabular-nums text-brand-700 dark:text-brand">
+                                {formatWon(it.amount)}
+                              </span>
+                            ) : (
+                              <span className="num text-base font-bold tabular-nums text-neutral-300 dark:text-neutral-700">
+                                0원
+                              </span>
+                            )}
                           </div>
-                        )}
+                        </div>
                         {amongRow(r, ii, it)}
                       </div>
                     ))}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 px-1">
                       <button
                         onClick={() => addItemToRound(r)}
                         className="-mx-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"
