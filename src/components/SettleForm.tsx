@@ -895,13 +895,20 @@ export function SettleForm({
                             onChange={(e) => patchItem(r, ii, { name: e.target.value })}
                             className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[16px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700 dark:bg-neutral-950"
                           />
-                          <button onClick={() => setPadTarget({ r, i: ii })} className={amountBtnCls}>
-                            {it.amount > 0 ? (
-                              formatWon(unitOf(it)) // 수량 쓰면 '단가', 아니면 amount=단가=총액(동일)
-                            ) : (
-                              <span className="text-neutral-400 dark:text-neutral-500">금액</span>
-                            )}
-                          </button>
+                          {itemQty(it) > 1 ? (
+                            /* 수량 모드: 총액이 주인공(크게·브랜드). 단가·수량은 아래 브레이크다운에서 편집. */
+                            <div className="num shrink-0 min-w-[88px] px-3 py-2.5 text-right text-[15px] font-bold tabular-nums text-brand-700 dark:text-brand">
+                              {formatWon(it.amount)}
+                            </div>
+                          ) : (
+                            <button onClick={() => setPadTarget({ r, i: ii })} className={amountBtnCls}>
+                              {it.amount > 0 ? (
+                                formatWon(it.amount)
+                              ) : (
+                                <span className="text-neutral-400 dark:text-neutral-500">금액</span>
+                              )}
+                            </button>
+                          )}
                           {rd.items.length > 1 && (
                             <button
                               onClick={() => removeItemFromRound(r, ii)}
@@ -912,37 +919,39 @@ export function SettleForm({
                             </button>
                           )}
                         </div>
-                        {/* 수량 (선택) — 단가 × 수량 = 금액. 영수증처럼. qty=1이면 '× 수량' 버튼만(간단 유지). */}
+                        {/* 수량 — 총액은 위에 크게, 여기선 단가×수량 브레이크다운(작게). 단가 탭=단가 수정, −로 1되면 수량 해제. */}
                         {itemQty(it) > 1 ? (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
-                            <span>×</span>
+                          <div className="mt-2 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                            <span className="shrink-0">단가</span>
+                            <button
+                              type="button"
+                              onClick={() => setPadTarget({ r, i: ii })}
+                              className="num rounded-lg border border-neutral-200 px-2.5 py-1 text-sm font-medium tabular-nums text-neutral-700 transition active:scale-95 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200"
+                            >
+                              {formatWon(unitOf(it))}
+                            </button>
+                            <span className="shrink-0">×</span>
                             <div className="inline-flex items-center rounded-lg border border-neutral-200 dark:border-neutral-700">
                               <button
                                 type="button"
                                 onClick={() => changeItemQty(r, ii, itemQty(it) - 1)}
                                 aria-label="수량 줄이기"
-                                className="flex h-7 w-7 items-center justify-center leading-none text-neutral-500 transition active:scale-90 hover:text-brand-700 dark:hover:text-brand"
+                                className="flex h-8 w-8 items-center justify-center text-base leading-none text-neutral-500 transition active:scale-90 hover:text-brand-700 dark:hover:text-brand"
                               >
                                 −
                               </button>
-                              <span className="num min-w-[1.75rem] text-center text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+                              <span className="num min-w-[1.5rem] text-center text-sm font-semibold text-neutral-700 dark:text-neutral-200">
                                 {itemQty(it)}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => changeItemQty(r, ii, itemQty(it) + 1)}
                                 aria-label="수량 늘리기"
-                                className="flex h-7 w-7 items-center justify-center leading-none text-neutral-500 transition active:scale-90 hover:text-brand-700 dark:hover:text-brand"
+                                className="flex h-8 w-8 items-center justify-center text-base leading-none text-neutral-500 transition active:scale-90 hover:text-brand-700 dark:hover:text-brand"
                               >
                                 +
                               </button>
                             </div>
-                            <span className="num">
-                              ={' '}
-                              <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                                {formatWon(it.amount)}
-                              </span>
-                            </span>
                           </div>
                         ) : (
                           it.amount > 0 && (
