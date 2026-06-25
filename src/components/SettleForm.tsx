@@ -123,6 +123,8 @@ export function SettleForm({
     sectionRefs.current[key] = el
   }
   const [loginPrompt, setLoginPrompt] = useState(false)
+  // 로그인 안내를 연 이유. 'submit'=정산하기(복원 후 자동제출) / 'scan'=영수증 스캔(복원만, 자동제출 X).
+  const loginReason = useRef<'submit' | 'scan'>('submit')
   const [autoSubmit, setAutoSubmit] = useState(false)
   const [pending, startTransition] = useTransition()
 
@@ -196,7 +198,8 @@ export function SettleForm({
       if (typeof d.eventDate === 'string') setEventDate(d.eventDate)
       if (Array.isArray(d.rounds)) setRounds(d.rounds)
       if (d.acct && typeof d.acct === 'object') setAcct(d.acct)
-      setAutoSubmit(true)
+      // 스캔 때문에 로그인한 거면 자동제출하지 않음(입력만 복원 → 사용자가 스캔 이어서). 그 외(정산하기)는 자동제출.
+      if (d.reason !== 'scan') setAutoSubmit(true)
     } catch {
       /* 손상된 draft 무시 */
     }
@@ -222,7 +225,7 @@ export function SettleForm({
   const goLogin = (provider: 'kakao' | 'google') => {
     sessionStorage.setItem(
       'payven:draft:create',
-      JSON.stringify({ mode, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct }),
+      JSON.stringify({ mode, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct, reason: loginReason.current }),
     )
     window.location.href = `/auth/login?provider=${provider}&next=${encodeURIComponent('/?resume=1')}`
   }
@@ -475,6 +478,8 @@ export function SettleForm({
       const imageBase64 = await downscaleToBase64(file)
       const res = await ocrReceiptAction({ imageBase64, mediaType: 'image/jpeg' })
       if ('needLogin' in res) {
+        // 세션 만료 등으로 서버가 막은 경우(클릭 게이트가 미로그인을 이미 거르지만 방어). 복원만, 자동제출 X.
+        loginReason.current = 'scan'
         setLoginPrompt(true)
         return
       }
@@ -629,6 +634,7 @@ export function SettleForm({
             // 어떤 provider로 로그인했는지 모르니 선택 페이지로(강제하면 다른 계정 → 소유자 게이트 막힘).
             window.location.href = `/auth?next=${encodeURIComponent(`/g/${editSlug}/edit`)}`
           } else {
+            loginReason.current = 'submit' // 정산하기 → 로그인 후 자동제출(복원+제출)
             setLoginPrompt(true)
           }
           return
@@ -1078,12 +1084,25 @@ export function SettleForm({
                       </button>
                     </div>
                     {/* 영수증 스캔(메뉴 추가/합치기 아래).
+                        미로그인: 클릭하면 파일 선택을 열지 않고 로그인 안내(서버도 Gemini 호출 전 차단해 토큰 0 —
+                        여기선 사진 선택·업로드 자체를 막아 헛수고·남용 방지). 로그인 후 입력만 복원(자동제출 X).
                         iOS·데스크톱: 누르면 OS 기본 선택(촬영/보관함/파일) 바로 열림.
                         안드로이드(갤럭시): accept만으론 갤러리(포토피커)로 직행해 카메라가 없음 → 누르면
                         '촬영/앨범' 드롭다운을 직접 띄워 카메라 선택을 보장. 옵션 input은 투명 오버레이. */}
                     <div className="relative mt-2 px-1">
                       {ocrRound === r ? (
                         <span className={OCR_PILL + ' pointer-events-none opacity-60'}>📷 인식 중…</span>
+                      ) : !isLoggedIn ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            loginReason.current = 'scan'
+                            setLoginPrompt(true)
+                          }}
+                          className={OCR_PILL}
+                        >
+                          📷 영수증 스캔
+                        </button>
                       ) : onAndroid ? (
                         <>
                           <button
