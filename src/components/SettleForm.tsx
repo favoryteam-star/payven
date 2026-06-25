@@ -1062,11 +1062,11 @@ export function SettleForm({
                           (ocrRound !== null ? 'pointer-events-none opacity-60' : '')
                         }
                       >
-                        {ocrRound === r ? '📷 인식 중…' : '📷 영수증 찍기'}
+                        {ocrRound === r ? '📷 인식 중…' : '📷 영수증 스캔'}
+                        {/* capture 없음 = OS가 '사진 찍기/앨범에서 선택/파일'을 모두 제공(촬영·가져오기 둘 다). */}
                         <input
                           type="file"
                           accept="image/*"
-                          capture="environment"
                           className="hidden"
                           disabled={ocrRound !== null}
                           onChange={(e) => handleReceipt(r, e)}
