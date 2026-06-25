@@ -110,7 +110,6 @@ export function SettleForm({
   )
   const [padTarget, setPadTarget] = useState<{ r: number; i: number } | null>(null) // 메뉴 금액 패드 대상
   const [ocrRound, setOcrRound] = useState<number | null>(null) // 영수증 인식 중인 차수(로딩 표시)
-  const [ocrMenuRound, setOcrMenuRound] = useState<number | null>(null) // 영수증 스캔 선택지(촬영/앨범) 열린 차수
   // 공통
   const [error, setError] = useState<string | null>(null)
   const [errorField, setErrorField] = useState<string | null>(null) // 에러 소속 섹션(인라인 표시·자동 스크롤)
@@ -463,7 +462,6 @@ export function SettleForm({
   const handleReceipt = async (r: number, e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = '' // 같은 파일 재선택 허용
-    setOcrMenuRound(null) // 선택지 닫기(취소든 선택이든)
     if (!file) return
     setError(null)
     setErrorField(null)
@@ -1074,56 +1072,19 @@ export function SettleForm({
                         메뉴 합치기
                       </button>
                     </div>
-                    {/* 영수증 스캔(메뉴 추가/합치기 아래) — 단일 버튼 → 탭하면 촬영/앨범 드롭다운.
-                        안드로이드 13+/TWA는 accept만으론 갤러리 직행(카메라 선택지 없음)이라 직접 선택지를 띄워
-                        카메라/앨범 둘 다 보장. 각 옵션 input은 행 위 투명 오버레이라 iOS 네이티브 시트 앵커링도 정상. */}
-                    <div className="relative mt-2 px-1">
-                      {ocrRound === r ? (
-                        <span className={OCR_PILL + ' pointer-events-none opacity-60'}>📷 인식 중…</span>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setOcrMenuRound(ocrMenuRound === r ? null : r)}
-                            aria-expanded={ocrMenuRound === r}
-                            className={OCR_PILL}
-                          >
-                            📷 영수증 스캔
-                          </button>
-                          {ocrMenuRound === r && (
-                            <>
-                              {/* 바깥 탭 = 닫기 */}
-                              <button
-                                type="button"
-                                aria-label="닫기"
-                                onClick={() => setOcrMenuRound(null)}
-                                className="fixed inset-0 z-10 cursor-default"
-                              />
-                              <div className="absolute left-1 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-                                <label className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                                  📷 사진 촬영
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                                    onChange={(e) => handleReceipt(r, e)}
-                                  />
-                                </label>
-                                <label className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                                  🖼 앨범에서 가져오기
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                                    onChange={(e) => handleReceipt(r, e)}
-                                  />
-                                </label>
-                              </div>
-                            </>
-                          )}
-                        </>
-                      )}
+                    {/* 영수증 스캔(메뉴 추가/합치기 아래) — 누르면 OS 파일 선택이 바로 열림(원래 동작).
+                        capture 없음 = OS 기본 선택지. 투명 input을 버튼 위 오버레이로 깔아 iOS 시트 앵커링 정상. */}
+                    <div className="mt-2 px-1">
+                      <label className={OCR_PILL + (ocrRound !== null ? ' pointer-events-none opacity-60' : '')}>
+                        {ocrRound === r ? '📷 인식 중…' : '📷 영수증 스캔'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          disabled={ocrRound !== null}
+                          onChange={(e) => handleReceipt(r, e)}
+                        />
+                      </label>
                     </div>
                   </div>
                 )}
