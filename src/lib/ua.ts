@@ -8,3 +8,11 @@ export function isInAppBrowser(ua: string | null | undefined): boolean {
   if (!ua) return false
   return IN_APP.test(ua)
 }
+
+// 안드로이드(갤럭시·크롬·삼성인터넷·TWA 포함) 감지 — 순수 함수.
+// 안드로이드 13+/Chrome은 <input accept="image/*">를 시스템 포토피커(갤러리)로 직행시켜 카메라 선택지가
+// 없다. 그래서 안드로이드일 때만 '촬영/앨범' 선택지를 직접 띄운다(iOS는 네이티브 시트가 촬영을 줌).
+export function isAndroid(ua: string | null | undefined): boolean {
+  if (!ua) return false
+  return /Android/i.test(ua)
+}

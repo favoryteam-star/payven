@@ -22,6 +22,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { AccountField, EMPTY_INLINE, NEW_ACCOUNT, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 import { AbsorberGame } from '@/components/AbsorberGame'
 import { useMyMemberGroups } from '@/components/memberGroups'
+import { isAndroid } from '@/lib/ua'
 
 // 메뉴(항목) 1개. among = 멤버 길이의 참여 여부(기본 전원).
 // amount = 라인 총액(분담·미리보기·제출의 단일 출처). qty = 라인 수량(선택, 입력 편의) — 단가=amount/qty.
@@ -110,6 +111,9 @@ export function SettleForm({
   )
   const [padTarget, setPadTarget] = useState<{ r: number; i: number } | null>(null) // 메뉴 금액 패드 대상
   const [ocrRound, setOcrRound] = useState<number | null>(null) // 영수증 인식 중인 차수(로딩 표시)
+  const [ocrMenuRound, setOcrMenuRound] = useState<number | null>(null) // (안드로이드만) 촬영/앨범 선택지 열린 차수
+  const [onAndroid, setOnAndroid] = useState(false) // 안드로이드면 스캔 시 촬영/앨범 선택지를 직접 띄움(SSR=false)
+  useEffect(() => setOnAndroid(isAndroid(navigator.userAgent)), [])
   // 공통
   const [error, setError] = useState<string | null>(null)
   const [errorField, setErrorField] = useState<string | null>(null) // 에러 소속 섹션(인라인 표시·자동 스크롤)
@@ -462,6 +466,7 @@ export function SettleForm({
   const handleReceipt = async (r: number, e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = '' // 같은 파일 재선택 허용
+    setOcrMenuRound(null) // (안드로이드) 선택지 닫기
     if (!file) return
     setError(null)
     setErrorField(null)
@@ -1072,19 +1077,66 @@ export function SettleForm({
                         메뉴 합치기
                       </button>
                     </div>
-                    {/* 영수증 스캔(메뉴 추가/합치기 아래) — 누르면 OS 파일 선택이 바로 열림(원래 동작).
-                        capture 없음 = OS 기본 선택지. 투명 input을 버튼 위 오버레이로 깔아 iOS 시트 앵커링 정상. */}
-                    <div className="mt-2 px-1">
-                      <label className={OCR_PILL + (ocrRound !== null ? ' pointer-events-none opacity-60' : '')}>
-                        {ocrRound === r ? '📷 인식 중…' : '📷 영수증 스캔'}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                          disabled={ocrRound !== null}
-                          onChange={(e) => handleReceipt(r, e)}
-                        />
-                      </label>
+                    {/* 영수증 스캔(메뉴 추가/합치기 아래).
+                        iOS·데스크톱: 누르면 OS 기본 선택(촬영/보관함/파일) 바로 열림.
+                        안드로이드(갤럭시): accept만으론 갤러리(포토피커)로 직행해 카메라가 없음 → 누르면
+                        '촬영/앨범' 드롭다운을 직접 띄워 카메라 선택을 보장. 옵션 input은 투명 오버레이. */}
+                    <div className="relative mt-2 px-1">
+                      {ocrRound === r ? (
+                        <span className={OCR_PILL + ' pointer-events-none opacity-60'}>📷 인식 중…</span>
+                      ) : onAndroid ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setOcrMenuRound(ocrMenuRound === r ? null : r)}
+                            aria-expanded={ocrMenuRound === r}
+                            className={OCR_PILL}
+                          >
+                            📷 영수증 스캔
+                          </button>
+                          {ocrMenuRound === r && (
+                            <>
+                              <button
+                                type="button"
+                                aria-label="닫기"
+                                onClick={() => setOcrMenuRound(null)}
+                                className="fixed inset-0 z-10 cursor-default"
+                              />
+                              <div className="absolute left-1 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+                                <label className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                                  📷 사진 촬영
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                    onChange={(e) => handleReceipt(r, e)}
+                                  />
+                                </label>
+                                <label className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                                  🖼 앨범에서 가져오기
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                    onChange={(e) => handleReceipt(r, e)}
+                                  />
+                                </label>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <label className={OCR_PILL}>
+                          📷 영수증 스캔
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                            onChange={(e) => handleReceipt(r, e)}
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
                 )}
