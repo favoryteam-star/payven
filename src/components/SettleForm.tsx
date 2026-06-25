@@ -907,7 +907,7 @@ export function SettleForm({
                             placeholder={`메뉴 ${ii + 1}`}
                             aria-label={`메뉴 ${ii + 1} 이름`}
                             onChange={(e) => patchItem(r, ii, { name: e.target.value })}
-                            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1 py-1 text-[16px] font-semibold text-neutral-900 outline-none placeholder:font-normal placeholder:text-neutral-400 focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:text-neutral-50 dark:placeholder:text-neutral-500"
+                            className="min-w-0 flex-1 rounded-lg bg-neutral-100 px-2.5 py-2 text-[16px] font-semibold text-neutral-900 outline-none placeholder:font-normal placeholder:text-neutral-400 focus:ring-2 focus:ring-brand/40 dark:bg-neutral-800/70 dark:text-neutral-50 dark:placeholder:text-neutral-500"
                           />
                           {rd.items.length > 1 && (
                             <button
