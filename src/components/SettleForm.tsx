@@ -23,7 +23,8 @@ import { AbsorberGame } from '@/components/AbsorberGame'
 import { useMyMemberGroups } from '@/components/memberGroups'
 
 // 메뉴(항목) 1개. among = 멤버 길이의 참여 여부(기본 전원).
-export type RoundItem = { name: string; amount: number; among: boolean[] }
+// amount = 라인 총액(분담·미리보기·제출의 단일 출처). qty = 라인 수량(선택, 입력 편의) — 단가=amount/qty.
+export type RoundItem = { name: string; amount: number; among: boolean[]; qty?: number }
 // 차수(=한 자리: 1차·2차) 1개. payer=그 자리 낸 사람 멤버 인덱스. split=메뉴별로 나눴는지.
 // split=false면 items=[총액 1개], split=true면 items=메뉴 여러 개.
 export type Round = { payer: number; split: boolean; items: RoundItem[] }
@@ -423,6 +424,28 @@ export function SettleForm({
           }),
         }
       }),
+    )
+
+  // ── 라인 수량(단가×수량) ── 메뉴별 항목에만. it.amount는 항상 '라인 총액'(분담·제출 단일 출처) — 수량은 입력 편의일 뿐.
+  // 입력값(단가)=amount/qty, 총액=단가×qty로 유지. qty 미지정/1이면 amount가 곧 단가=총액(기존과 동일).
+  // 서버는 amount만 저장 → 수정 화면에선 총액만 복원되고 단가×수량 분해는 사라짐(의도된 V1).
+  const itemQty = (it: RoundItem) => (it.qty && it.qty > 1 ? it.qty : 1)
+  const unitOf = (it: RoundItem) => Math.round(it.amount / itemQty(it))
+  const changeItemQty = (r: number, ii: number, nextQty: number) =>
+    setRounds((p) =>
+      p.map((rd, i) =>
+        i !== r
+          ? rd
+          : {
+              ...rd,
+              items: rd.items.map((it, k) => {
+                if (k !== ii) return it
+                const unit = unitOf(it) // 현재 단가 보존(수량만 바꿀 때 총액 재계산)
+                const q = Math.min(99, Math.max(1, nextQty))
+                return { ...it, qty: q > 1 ? q : undefined, amount: unit * q }
+              }),
+            },
+      ),
     )
 
   // 모드 전환. 제목 따라가기 + 항목별 첫 진입이면 차수 1개 자동 생성(메뉴 펼친 채 바로 입력하게).
@@ -874,7 +897,7 @@ export function SettleForm({
                           />
                           <button onClick={() => setPadTarget({ r, i: ii })} className={amountBtnCls}>
                             {it.amount > 0 ? (
-                              formatWon(it.amount)
+                              formatWon(unitOf(it)) // 수량 쓰면 '단가', 아니면 amount=단가=총액(동일)
                             ) : (
                               <span className="text-neutral-400 dark:text-neutral-500">금액</span>
                             )}
@@ -889,6 +912,49 @@ export function SettleForm({
                             </button>
                           )}
                         </div>
+                        {/* 수량 (선택) — 단가 × 수량 = 금액. 영수증처럼. qty=1이면 '× 수량' 버튼만(간단 유지). */}
+                        {itemQty(it) > 1 ? (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                            <span>×</span>
+                            <div className="inline-flex items-center rounded-lg border border-neutral-200 dark:border-neutral-700">
+                              <button
+                                type="button"
+                                onClick={() => changeItemQty(r, ii, itemQty(it) - 1)}
+                                aria-label="수량 줄이기"
+                                className="flex h-7 w-7 items-center justify-center leading-none text-neutral-500 transition active:scale-90 hover:text-brand-700 dark:hover:text-brand"
+                              >
+                                −
+                              </button>
+                              <span className="num min-w-[1.75rem] text-center text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+                                {itemQty(it)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => changeItemQty(r, ii, itemQty(it) + 1)}
+                                aria-label="수량 늘리기"
+                                className="flex h-7 w-7 items-center justify-center leading-none text-neutral-500 transition active:scale-90 hover:text-brand-700 dark:hover:text-brand"
+                              >
+                                +
+                              </button>
+                            </div>
+                            <span className="num">
+                              ={' '}
+                              <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+                                {formatWon(it.amount)}
+                              </span>
+                            </span>
+                          </div>
+                        ) : (
+                          it.amount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => changeItemQty(r, ii, 2)}
+                              className="mt-1.5 text-xs text-neutral-400 underline-offset-2 transition hover:text-brand-700 hover:underline dark:text-neutral-500 dark:hover:text-brand"
+                            >
+                              × 수량
+                            </button>
+                          )
+                        )}
                         {amongRow(r, ii, it)}
                       </div>
                     ))}
@@ -1213,12 +1279,17 @@ export function SettleForm({
 
       {/* 1/N 금액 숫자패드 */}
       <Numpad open={padOpen} amount={amount} onChange={setAmount} onClose={() => setPadOpen(false)} />
-      {/* 항목별 메뉴 금액 숫자패드 */}
+      {/* 항목별 메뉴 금액 숫자패드 — 수량 쓰면 '단가'를 입력받고 금액=단가×수량으로 저장(평소엔 총액 그대로). */}
       <Numpad
         open={padTarget !== null}
-        amount={padTarget ? (rounds[padTarget.r]?.items[padTarget.i]?.amount ?? 0) : 0}
+        amount={(() => {
+          const it = padTarget ? rounds[padTarget.r]?.items[padTarget.i] : null
+          return it ? unitOf(it) : 0
+        })()}
         onChange={(amt) => {
-          if (padTarget) patchItem(padTarget.r, padTarget.i, { amount: amt })
+          if (!padTarget) return
+          const it = rounds[padTarget.r]?.items[padTarget.i]
+          patchItem(padTarget.r, padTarget.i, { amount: amt * (it ? itemQty(it) : 1) })
         }}
         onClose={() => setPadTarget(null)}
       />
