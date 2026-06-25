@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { equalSplit, minimizeCashFlow, netBalances, splitByWeights } from './settle'
+import { equalSplit, minimizeCashFlow, netBalances, roundingLeftover, splitByWeights } from './settle'
 import type { ExpenseRecord, MemberId, SettlementRecord, Weight } from './types'
 
 const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0)
@@ -307,6 +307,58 @@ describe('minimizeCashFlow', () => {
     const transfers = minimizeCashFlow(net)
     expect(transfers).toHaveLength(9) // m=10 nonzero → ≤ 9
     expect(transfers.every((t) => t.to === 'a')).toBe(true)
+  })
+})
+
+// 단위 내림으로 생기는 '남는 금액'(흡수자 몫) — 폼 '남은 N원'·공유 상세 안내 공용 값.
+describe('roundingLeftover', () => {
+  it('10,000 ÷ 3, 천원 → 남은 1,000', () => {
+    expect(roundingLeftover(10000, 3, 1000)).toBe(1000) // base 3000×3=9000
+  })
+
+  it('10,000 ÷ 3, 안 함(1) → 남은 1원(1~2원 자투리)', () => {
+    expect(roundingLeftover(10000, 3, 1)).toBe(1) // 10000 mod 3
+  })
+
+  it('딱 떨어지면 0', () => {
+    expect(roundingLeftover(9000, 3, 100)).toBe(0)
+    expect(roundingLeftover(9000, 3, 1)).toBe(0)
+  })
+
+  it('항목별 합산: 폼 itemsLeftover와 동일 공식', () => {
+    // 10,000(3명)·5,000(2명) 천원 → 1,000 + 1,000 = 2,000
+    expect(roundingLeftover(10000, 3, 1000) + roundingLeftover(5000, 2, 1000)).toBe(2000)
+  })
+
+  it('가드: 금액 0·참여자 0·단위 0이면 0', () => {
+    expect(roundingLeftover(0, 3, 1000)).toBe(0)
+    expect(roundingLeftover(10000, 0, 1000)).toBe(0)
+    expect(roundingLeftover(10000, 3, 0)).toBe(0)
+  })
+
+  it('비흡수자 base 합 + leftover = amount (불변식, 300 runs)', () => {
+    const UNITS = [1, 10, 100, 1000]
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 1_000_000_000 }),
+        fc.integer({ min: 1, max: 12 }),
+        fc.integer({ min: 0, max: 3 }),
+        (amount, n, unitIdx) => {
+          const unit = UNITS[unitIdx]
+          const leftover = roundingLeftover(amount, n, unit)
+          expect(leftover).toBeGreaterThanOrEqual(0)
+          expect(Number.isInteger(leftover)).toBe(true)
+          // 균등분할의 흡수자 몫 = base + leftover, 합 = amount
+          const shares = equalSplit(amount, Array.from({ length: n }, (_, i) => `m${i}`), { unit, absorber: 'm0' })
+          expect(sum(shares.map((s) => s.amount))).toBe(amount)
+          if (amount > 0) {
+            const base = Math.floor(amount / (n * unit)) * unit
+            expect(amount - base * n).toBe(leftover)
+          }
+        },
+      ),
+      { numRuns: 300 },
+    )
   })
 })
 

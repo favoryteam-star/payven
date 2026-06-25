@@ -1,7 +1,7 @@
 import 'server-only'
 import { nanoid } from 'nanoid'
 import { getAdminClient } from './db'
-import { equalSplit, minimizeCashFlow, netBalances, splitByWeights } from '@/domain/settle'
+import { equalSplit, minimizeCashFlow, netBalances, roundingLeftover, splitByWeights } from '@/domain/settle'
 import type { ExpenseRecord, SettlementRecord } from '@/domain/types'
 import type {
   ItemizedBillInput,
@@ -69,14 +69,38 @@ export interface GroupSnapshot {
   settledTransfers: SettledTransfer[] // 화면 표시·취소용 — id 있음
   isItemized: boolean // 항목별(weighted)이면 상세보기 노출. 빠른정산은 false.
   rounds: SnapshotRound[] // 표시 전용 차수→메뉴→참여자(항목별만 채움)
+  // 단위 맞춤 '남은 금액'을 떠안은 흡수자(0015 메타). 없으면 null. extra = 폼에서 본 '남은 N원'.
+  absorber: { memberId: string; extra: number } | null
 }
 
-/** 정산 날짜(event_date)를 RPC가 만든 그룹에 베스트에포트 부착. 실패해도 정산은 유지(표시는 created_at 폴백). */
-async function setEventDate(slug: string, eventDate: string | undefined): Promise<void> {
-  if (!eventDate) return
+/**
+ * RPC가 만든/수정한 그룹에 표시용 메타(정산 날짜 + 단위 맞춤 '남은 금액'·흡수자)를 베스트에포트 부착.
+ * RPC를 안 건드리는 대신 여기서 한 번 더 UPDATE(실패해도 정산은 유지 — 날짜는 created_at, 잔돈은 안내 생략으로 폴백).
+ * absorber_index는 흡수자가 leftover>0일 때만(쏘기·딱 떨어짐이면 null) — 멤버 생성 순서 인덱스(공유 페이지가 멤버 배열로 해석).
+ */
+async function setGroupMeta(
+  slug: string,
+  meta: { eventDate?: string; leftover: number; absorberIndex?: number },
+): Promise<void> {
   const supa = getAdminClient()
-  const { error } = await supa.from('groups').update({ event_date: eventDate }).eq('slug', slug)
-  if (error) console.error('event_date 설정 실패(무시):', error.message)
+  const patch: { event_date?: string; leftover_amount: number; absorber_index: number | null } = {
+    leftover_amount: meta.leftover,
+    absorber_index: meta.leftover > 0 ? (meta.absorberIndex ?? null) : null,
+  }
+  if (meta.eventDate) patch.event_date = meta.eventDate
+  const { error } = await supa.from('groups').update(patch).eq('slug', slug)
+  if (error) console.error('그룹 메타 설정 실패(무시):', error.message)
+}
+
+/** 항목별 차수 묶음에서 단위 맞춤 '남은 금액' 합(흡수자가 떠안음). 폼 itemsLeftover와 동일 공식(roundingLeftover). */
+function itemizedLeftover(
+  rounds: { items: { amount: number; participants: number[] }[] }[],
+  unit: number,
+): number {
+  return rounds.reduce(
+    (s, rd) => s + rd.items.reduce((t, it) => t + roundingLeftover(it.amount, it.participants.length, unit), 0),
+    0,
+  )
 }
 
 /** 빠른정산: 임시그룹+멤버+지출+분담을 RPC로 원자적 생성. 분담은 도메인에서 계산. ownerId=로그인 사용자. */
@@ -134,7 +158,9 @@ export async function createQuickSettle(
     p_acct_holder: input.account?.accountHolder,
   })
   if (error) throw new Error(`빠른정산 생성 실패: ${error.message}`)
-  await setEventDate(slug, input.eventDate)
+  // 쏘기(winnerIndex)는 한 명 전액이라 잔돈 개념 없음 → leftover 0. 아니면 균등 분할의 남는 금액.
+  const leftover = input.winnerIndex !== undefined ? 0 : roundingLeftover(input.amount, input.members.length, input.unit)
+  await setGroupMeta(slug, { eventDate: input.eventDate, leftover, absorberIndex: input.absorberIndex })
   return { slug }
 }
 
@@ -204,7 +230,11 @@ export async function addItemizedBill(
     p_acct_holder: input.account?.accountHolder,
   })
   if (error) throw new Error(`항목별 정산 생성 실패: ${error.message}`)
-  await setEventDate(slug, input.eventDate)
+  await setGroupMeta(slug, {
+    eventDate: input.eventDate,
+    leftover: itemizedLeftover(input.rounds, input.unit),
+    absorberIndex: input.absorberIndex,
+  })
   return { slug }
 }
 
@@ -234,7 +264,8 @@ export async function updateQuickSettle(
     p_acct_holder: input.account?.accountHolder,
   })
   if (error) throw new Error(`정산 수정 실패: ${error.message}`)
-  await setEventDate(input.slug, input.eventDate)
+  const leftover = input.winnerIndex !== undefined ? 0 : roundingLeftover(input.amount, input.members.length, input.unit)
+  await setGroupMeta(input.slug, { eventDate: input.eventDate, leftover, absorberIndex: input.absorberIndex })
   return { slug: input.slug }
 }
 
@@ -263,7 +294,11 @@ export async function updateItemizedBill(
     p_acct_holder: input.account?.accountHolder,
   })
   if (error) throw new Error(`정산 수정 실패: ${error.message}`)
-  await setEventDate(input.slug, input.eventDate)
+  await setGroupMeta(input.slug, {
+    eventDate: input.eventDate,
+    leftover: itemizedLeftover(input.rounds, input.unit),
+    absorberIndex: input.absorberIndex,
+  })
   return { slug: input.slug }
 }
 
@@ -309,7 +344,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
 
   const { data: group, error: gErr } = await supa
     .from('groups')
-    .select('id, slug, name, kind, created_at, owner_id, event_date')
+    .select('id, slug, name, kind, created_at, owner_id, event_date, leftover_amount, absorber_index')
     .eq('slug', slug)
     .maybeSingle()
   if (gErr) throw new Error(gErr.message)
@@ -386,6 +421,14 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
     amount: s.amount,
   }))
 
+  // 단위 맞춤 '남은 금액' 흡수자 — 저장된 인덱스를 멤버(생성 순서)로 해석. leftover>0·인덱스 유효일 때만.
+  const memberRows = membersRes.data ?? []
+  const absIdx = group.absorber_index
+  const absorber =
+    group.leftover_amount > 0 && absIdx !== null && absIdx >= 0 && absIdx < memberRows.length
+      ? { memberId: memberRows[absIdx].id, extra: group.leftover_amount }
+      : null
+
   return {
     group: {
       id: group.id,
@@ -396,7 +439,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
       ownerId: group.owner_id,
       eventDate: group.event_date,
     },
-    members: (membersRes.data ?? []).map((m) => ({
+    members: memberRows.map((m) => ({
       id: m.id,
       name: m.name,
       bankName: m.bank_name,
@@ -408,6 +451,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
     settledTransfers,
     isItemized,
     rounds: snapshotRounds,
+    absorber,
   }
 }
 

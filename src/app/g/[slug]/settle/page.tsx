@@ -107,6 +107,9 @@ export default async function SettlePage({ params }: Params) {
   }))
   const showDetails = snap.isItemized && detailRounds.length > 0
 
+  // 단위 맞춤 '남은 금액'을 떠안은 흡수자(저장된 leftover/absorber_index → 멤버). 없으면 null.
+  const absorber = snap.absorber ? { name: displayName(snap.absorber.memberId), extra: snap.absorber.extra } : null
+
   return (
     <main className="flex min-h-dvh flex-col px-5 pb-8 pt-5">
       <SettleBackLink />
@@ -148,7 +151,7 @@ export default async function SettlePage({ params }: Params) {
         canManageAll={canManageAll}
       />
 
-      {showDetails && <SettleDetails rounds={detailRounds} />}
+      {showDetails && <SettleDetails rounds={detailRounds} absorber={absorber} />}
 
       <div className="mt-auto pt-8">
         <ShareButton title={`${snap.group.name} 정산`} />

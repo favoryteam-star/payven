@@ -106,6 +106,17 @@ function compareId(a: MemberId, b: MemberId): number {
 }
 
 /**
+ * 단위 내림으로 생기는 '남는 금액'(흡수자가 떠안는 양) — 균등(weight 1) 한 항목 기준. 폼·서버 공용(표시·저장 단일 출처).
+ * base = floor(amount/(n·unit))·unit, leftover = amount − base·n. unit=1이면 amount mod n(1~2원).
+ * 흡수자 칩의 "남은 N원"·공유 상세 안내가 모두 이 값을 쓴다. 항목별은 항목마다 구해 합산.
+ */
+export function roundingLeftover(amount: number, n: number, unit = 1): number {
+  if (n < 1 || amount <= 0 || unit < 1) return 0
+  const base = Math.floor(amount / (n * unit)) * unit
+  return amount - base * n
+}
+
+/**
  * 순잔액. net > 0 = 받을 사람(채권자), net < 0 = 낼 사람(채무자), 전체 합 = 0.
  */
 export function netBalances(

@@ -109,31 +109,37 @@ export type Database = {
       }
       groups: {
         Row: {
+          absorber_index: number | null
           base_currency: string
           created_at: string
           event_date: string | null
           id: string
           kind: string
+          leftover_amount: number
           name: string
           owner_id: string | null
           slug: string
         }
         Insert: {
+          absorber_index?: number | null
           base_currency?: string
           created_at?: string
           event_date?: string | null
           id?: string
           kind?: string
+          leftover_amount?: number
           name: string
           owner_id?: string | null
           slug: string
         }
         Update: {
+          absorber_index?: number | null
           base_currency?: string
           created_at?: string
           event_date?: string | null
           id?: string
           kind?: string
+          leftover_amount?: number
           name?: string
           owner_id?: string | null
           slug?: string

@@ -7,9 +7,11 @@ import { formatWon } from '@/domain/money'
 type DetailParticipant = { name: string; amount: number } // 이름 + 그 메뉴에서의 분담액
 type DetailItem = { name: string; amount: number; qty: number; participants: DetailParticipant[] } // qty>1이면 단가×수량 표시
 type DetailRound = { payerName: string; items: DetailItem[] }
+// 단위 맞춤으로 잔돈을 더 떠안은 사람(이름·차액). 없으면 null. page가 분담액에서 역산해 넘김.
+type Absorber = { name: string; extra: number }
 
 /** 공유 정산 페이지 '상세히 보기' — 차수→메뉴→참여자(이름·분담액). 어떤 정산이었는지 맥락. 기본 접힘. */
-export function SettleDetails({ rounds }: { rounds: DetailRound[] }) {
+export function SettleDetails({ rounds, absorber }: { rounds: DetailRound[]; absorber?: Absorber | null }) {
   const [open, setOpen] = useState(false)
   const multi = rounds.length > 1 // 자리가 1개뿐이면 '1차' 라벨 생략(모임 규모 과장 방지)
 
@@ -77,6 +79,16 @@ export function SettleDetails({ rounds }: { rounds: DetailRound[] }) {
               </div>
             )
           })}
+
+          {/* 단위 맞춤 안내 — 금액을 깔끔하게 맞추느라 남은 자투리를 흡수자 한 명이 더 낸 경우(폼 '남은 N원'과 동일). */}
+          {absorber && absorber.extra > 0 && (
+            <p className="rounded-2xl bg-brand/5 px-4 py-3 text-xs leading-relaxed text-neutral-600 dark:bg-brand/10 dark:text-neutral-300">
+              💡 금액을 깔끔하게 맞추느라{' '}
+              <span className="font-semibold text-brand-700 dark:text-brand">{absorber.name}</span>님이 남은 금액{' '}
+              <span className="num font-semibold text-brand-700 dark:text-brand">{formatWon(absorber.extra)}</span>을 더
+              냈어요.
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition, type ChangeEvent, type KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatWon } from '@/domain/money'
-import { equalSplit } from '@/domain/settle'
+import { equalSplit, roundingLeftover } from '@/domain/settle'
 import {
   addItemizedBillAction,
   getRecentMembersAction,
@@ -253,7 +253,7 @@ export function SettleForm({
   // 1/N: 균등이라 base는 전원 동일. 단위로 안 떨어지면 남는 금액은 고른 사람이 흡수(안 함의 1~2원 포함).
   const perPerson = amount > 0 && filled.length >= 1 ? Math.floor(amount / filled.length) : 0
   const quickBase = perPerson > 0 ? Math.floor(amount / (filled.length * unit)) * unit : 0
-  const quickLeftover = perPerson > 0 ? amount - quickBase * filled.length : 0
+  const quickLeftover = roundingLeftover(amount, filled.length, unit) // 폼·서버·공유 상세 단일 출처
 
   // 항목별: 모든 차수의 메뉴를 펼쳐(낸 사람=그 차수) 인별 합계·남는 금액. 미리보기=제출과 동일 도메인 호출.
   const allItems = rounds.flatMap((rd) => rd.items.map((it) => ({ it, payer: effRoundPayer(rd) })))
@@ -271,7 +271,7 @@ export function SettleForm({
     })
     const byId = new Map(shares.map((s) => [s.memberId, s.amount]))
     for (const oi of parts) tabs[filledIdx.indexOf(oi)] += byId.get(String(oi)) ?? 0
-    itemsLeftover += it.amount - Math.floor(it.amount / (parts.length * unit)) * unit * parts.length
+    itemsLeftover += roundingLeftover(it.amount, parts.length, unit) // 폼·서버·공유 상세 단일 출처
   }
 
   // 모드 공통: 남는 금액 + 단위 섹션 노출 여부.
