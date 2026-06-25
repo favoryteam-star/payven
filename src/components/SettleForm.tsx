@@ -110,6 +110,7 @@ export function SettleForm({
   )
   const [padTarget, setPadTarget] = useState<{ r: number; i: number } | null>(null) // 메뉴 금액 패드 대상
   const [ocrRound, setOcrRound] = useState<number | null>(null) // 영수증 인식 중인 차수(로딩 표시)
+  const [ocrMenuRound, setOcrMenuRound] = useState<number | null>(null) // 영수증 스캔 선택지(촬영/앨범) 열린 차수
   // 공통
   const [error, setError] = useState<string | null>(null)
   const [errorField, setErrorField] = useState<string | null>(null) // 에러 소속 섹션(인라인 표시·자동 스크롤)
@@ -462,6 +463,7 @@ export function SettleForm({
   const handleReceipt = async (r: number, e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = '' // 같은 파일 재선택 허용
+    setOcrMenuRound(null) // 선택지 닫기(취소든 선택이든)
     if (!file) return
     setError(null)
     setErrorField(null)
@@ -1059,37 +1061,6 @@ export function SettleForm({
                       </div>
                     ))}
                     <div className="flex flex-wrap items-center gap-3 px-1">
-                      {/* 영수증 스캔 — 사진 → 메뉴·금액 자동 채움(Gemini).
-                          촬영/앨범을 버튼 2개로 분리: 안드로이드 13+/TWA는 capture 없으면 갤러리로 직행(카메라 선택지 없음),
-                          capture=environment를 주면 카메라만 열려 갤러리가 사라짐 → 한 input으론 둘 다 보장 불가.
-                          그래서 직접 선택지를 둠. 투명 input을 버튼 위에 오버레이로 깔아야 iOS 메뉴가 버튼 위치에 앵커링됨. */}
-                      {ocrRound === r ? (
-                        <span className={OCR_PILL + ' pointer-events-none opacity-60'}>📷 인식 중…</span>
-                      ) : (
-                        <>
-                          <label className={OCR_PILL + (ocrRound !== null ? ' pointer-events-none opacity-60' : '')}>
-                            📷 촬영
-                            <input
-                              type="file"
-                              accept="image/*"
-                              capture="environment"
-                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                              disabled={ocrRound !== null}
-                              onChange={(e) => handleReceipt(r, e)}
-                            />
-                          </label>
-                          <label className={OCR_PILL + (ocrRound !== null ? ' pointer-events-none opacity-60' : '')}>
-                            🖼 앨범
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                              disabled={ocrRound !== null}
-                              onChange={(e) => handleReceipt(r, e)}
-                            />
-                          </label>
-                        </>
-                      )}
                       <button
                         onClick={() => addItemToRound(r)}
                         className="-mx-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-2 text-sm font-medium text-neutral-500 transition hover:text-brand-700 dark:hover:text-brand"
@@ -1102,6 +1073,53 @@ export function SettleForm({
                       >
                         메뉴 합치기
                       </button>
+                    </div>
+                    {/* 영수증 스캔(메뉴 추가/합치기 아래) — 단일 버튼, 탭하면 촬영/앨범 선택지가 뜸.
+                        안드로이드 13+/TWA는 accept만으론 갤러리로 직행(카메라 선택지 없음)이라, 단일 버튼 모양은
+                        유지하되 탭 시 직접 선택지를 띄워 카메라/앨범 둘 다 보장. 선택지 input은 버튼 위 투명
+                        오버레이로 깔아 iOS 메뉴 앵커링까지 정상. */}
+                    <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
+                      {ocrRound === r ? (
+                        <span className={OCR_PILL + ' pointer-events-none opacity-60'}>📷 인식 중…</span>
+                      ) : ocrMenuRound === r ? (
+                        <>
+                          <label className={OCR_PILL}>
+                            📷 사진 촬영
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                              onChange={(e) => handleReceipt(r, e)}
+                            />
+                          </label>
+                          <label className={OCR_PILL}>
+                            🖼 앨범에서
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                              onChange={(e) => handleReceipt(r, e)}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setOcrMenuRound(null)}
+                            className="rounded-lg px-2 py-1.5 text-sm text-neutral-500 transition hover:text-neutral-700 dark:hover:text-neutral-300"
+                          >
+                            취소
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setOcrMenuRound(r)}
+                          disabled={ocrRound !== null}
+                          className={OCR_PILL + (ocrRound !== null ? ' pointer-events-none opacity-60' : '')}
+                        >
+                          📷 영수증 스캔
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
