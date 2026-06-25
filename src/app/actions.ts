@@ -93,7 +93,7 @@ export const addItemizedBillAction = withRateLimit(async (raw: unknown): Promise
 // ── 영수증 OCR(로그인 필수 — 유료 비전 API 비용 통제). 사진 → 메뉴+금액. ──
 // 이미지는 저장 안 함(호출 후 버림). 일반 write와 분리된 'ocr' 버킷으로 레이트리밋.
 type OcrResult =
-  | { lines: { name: string; amount: number }[]; total: number }
+  | { lines: { name: string; qty: number; amount: number }[]; total: number }
   | { needLogin: true }
   | { ok: false; error: string }
 

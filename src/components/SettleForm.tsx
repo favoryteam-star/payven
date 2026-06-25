@@ -435,12 +435,18 @@ export function SettleForm({
       img.src = url
     })
 
-  const applyOcrLines = (r: number, lines: { name: string; amount: number }[]) => {
+  const applyOcrLines = (r: number, lines: { name: string; qty: number; amount: number }[]) => {
     if (lines.length === 0) return
     setRounds((p) =>
       p.map((rd, i) => {
         if (i !== r) return rd
-        const ocrItems: RoundItem[] = lines.map((l) => ({ name: l.name, amount: l.amount, among: allAmong() }))
+        // amount=줄 합계(분담 단일 출처) 그대로. qty>1이면 단가=합계/수량으로 영수증처럼 표시.
+        const ocrItems: RoundItem[] = lines.map((l) => ({
+          name: l.name,
+          amount: l.amount,
+          qty: l.qty > 1 ? l.qty : undefined,
+          among: allAmong(),
+        }))
         // 차수가 '빈 시드 한 줄'뿐이면 교체, 아니면 기존 메뉴 뒤에 덧붙임. split은 항상 펼침.
         const it0 = rd.items[0]
         const onlySeed = rd.items.length === 1 && it0.amount === 0 && !it0.name.trim()

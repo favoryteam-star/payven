@@ -6,7 +6,7 @@ import { GoogleGenAI, Type } from '@google/genai'
 // GEMINI_API_KEY는 이 파일에서만 읽는다(server-only). 이미지는 저장하지 않고 호출 후 버린다.
 // 돈은 전부 정수 KRW — 모델이 소수/문자를 줘도 toInt로 강제(하드룰 1).
 
-export type ReceiptLine = { name: string; amount: number }
+export type ReceiptLine = { name: string; qty: number; amount: number }
 export type ReceiptParse = { lines: ReceiptLine[]; total: number }
 
 const MODEL = 'gemini-2.5-flash-lite'
@@ -27,10 +27,11 @@ const RESPONSE_SCHEMA = {
         type: Type.OBJECT,
         properties: {
           name: { type: Type.STRING },
+          qty: { type: Type.INTEGER },
           amount: { type: Type.INTEGER },
         },
-        required: ['name', 'amount'],
-        propertyOrdering: ['name', 'amount'],
+        required: ['name', 'qty', 'amount'],
+        propertyOrdering: ['name', 'qty', 'amount'],
       },
     },
     total: { type: Type.INTEGER },
@@ -40,7 +41,7 @@ const RESPONSE_SCHEMA = {
 }
 
 const SYSTEM = `너는 한국 음식점 영수증 사진에서 주문 항목을 추출하는 도구야.
-- 각 메뉴의 이름(name)과 그 줄의 합계 금액(amount, 원, 정수)을 뽑아 lines 배열로 만든다. amount는 단가×수량(그 줄에 찍힌 금액).
+- 각 메뉴의 이름(name), 수량(qty, 정수 개수), 그 줄의 합계 금액(amount, 원, 정수)을 뽑아 lines 배열로 만든다. amount는 그 줄에 찍힌 합계(단가×수량). qty는 '수량' 칸의 개수(예: "4개"→4); 수량 표기가 없으면 1.
 - 부가세·봉사료·할인 같은 합계 조정 줄, 결제수단, 카드정보, 매장명, 주소, 전화번호, 사업자번호는 항목에서 제외한다.
 - 금액은 쉼표 없는 정수 원(예: 12000). 소수점·통화기호 금지.
 - total은 영수증에 적힌 '합계/결제금액'(정수 원). 못 찾으면 lines 금액의 합으로 둔다.
@@ -97,9 +98,9 @@ function normalize(raw: unknown): ReceiptParse {
   const lines: ReceiptLine[] = Array.isArray(obj.lines)
     ? obj.lines
         .map((l) => {
-          const o = (l ?? {}) as { name?: unknown; amount?: unknown }
+          const o = (l ?? {}) as { name?: unknown; qty?: unknown; amount?: unknown }
           const name = typeof o.name === 'string' ? o.name.trim() : ''
-          return { name, amount: toInt(o.amount) }
+          return { name, qty: Math.max(1, toInt(o.qty) || 1), amount: toInt(o.amount) }
         })
         .filter((l) => l.amount > 0) // 금액 0/음수 줄(소계·메뉴만) 제외
     : []
