@@ -1074,51 +1074,55 @@ export function SettleForm({
                         메뉴 합치기
                       </button>
                     </div>
-                    {/* 영수증 스캔(메뉴 추가/합치기 아래) — 단일 버튼, 탭하면 촬영/앨범 선택지가 뜸.
-                        안드로이드 13+/TWA는 accept만으론 갤러리로 직행(카메라 선택지 없음)이라, 단일 버튼 모양은
-                        유지하되 탭 시 직접 선택지를 띄워 카메라/앨범 둘 다 보장. 선택지 input은 버튼 위 투명
-                        오버레이로 깔아 iOS 메뉴 앵커링까지 정상. */}
-                    <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
+                    {/* 영수증 스캔(메뉴 추가/합치기 아래) — 단일 버튼 → 탭하면 촬영/앨범 드롭다운.
+                        안드로이드 13+/TWA는 accept만으론 갤러리 직행(카메라 선택지 없음)이라 직접 선택지를 띄워
+                        카메라/앨범 둘 다 보장. 각 옵션 input은 행 위 투명 오버레이라 iOS 네이티브 시트 앵커링도 정상. */}
+                    <div className="relative mt-2 px-1">
                       {ocrRound === r ? (
                         <span className={OCR_PILL + ' pointer-events-none opacity-60'}>📷 인식 중…</span>
-                      ) : ocrMenuRound === r ? (
+                      ) : (
                         <>
-                          <label className={OCR_PILL}>
-                            📷 사진 촬영
-                            <input
-                              type="file"
-                              accept="image/*"
-                              capture="environment"
-                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                              onChange={(e) => handleReceipt(r, e)}
-                            />
-                          </label>
-                          <label className={OCR_PILL}>
-                            🖼 앨범에서
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                              onChange={(e) => handleReceipt(r, e)}
-                            />
-                          </label>
                           <button
                             type="button"
-                            onClick={() => setOcrMenuRound(null)}
-                            className="rounded-lg px-2 py-1.5 text-sm text-neutral-500 transition hover:text-neutral-700 dark:hover:text-neutral-300"
+                            onClick={() => setOcrMenuRound(ocrMenuRound === r ? null : r)}
+                            aria-expanded={ocrMenuRound === r}
+                            className={OCR_PILL}
                           >
-                            취소
+                            📷 영수증 스캔
                           </button>
+                          {ocrMenuRound === r && (
+                            <>
+                              {/* 바깥 탭 = 닫기 */}
+                              <button
+                                type="button"
+                                aria-label="닫기"
+                                onClick={() => setOcrMenuRound(null)}
+                                className="fixed inset-0 z-10 cursor-default"
+                              />
+                              <div className="absolute left-1 top-full z-20 mt-1 w-48 overflow-hidden rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+                                <label className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                                  📷 사진 촬영
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                    onChange={(e) => handleReceipt(r, e)}
+                                  />
+                                </label>
+                                <label className="relative flex cursor-pointer items-center gap-2 overflow-hidden px-3.5 py-2.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                                  🖼 앨범에서 가져오기
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                    onChange={(e) => handleReceipt(r, e)}
+                                  />
+                                </label>
+                              </div>
+                            </>
+                          )}
                         </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setOcrMenuRound(r)}
-                          disabled={ocrRound !== null}
-                          className={OCR_PILL + (ocrRound !== null ? ' pointer-events-none opacity-60' : '')}
-                        >
-                          📷 영수증 스캔
-                        </button>
                       )}
                     </div>
                   </div>
