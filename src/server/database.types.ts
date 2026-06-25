@@ -63,6 +63,7 @@ export type Database = {
           group_id: string
           id: string
           paid_by: string
+          quantity: number
           split_type: string
         }
         Insert: {
@@ -74,6 +75,7 @@ export type Database = {
           group_id: string
           id?: string
           paid_by: string
+          quantity?: number
           split_type?: string
         }
         Update: {
@@ -85,6 +87,7 @@ export type Database = {
           group_id?: string
           id?: string
           paid_by?: string
+          quantity?: number
           split_type?: string
         }
         Relationships: [

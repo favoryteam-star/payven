@@ -5,7 +5,7 @@ import { formatWon } from '@/domain/money'
 
 // page가 계산한 plain props만 받는다(이름은 displayName으로 이미 해석됨, 재계산 금지 — CLAUDE.md).
 type DetailParticipant = { name: string; amount: number } // 이름 + 그 메뉴에서의 분담액
-type DetailItem = { name: string; amount: number; participants: DetailParticipant[] }
+type DetailItem = { name: string; amount: number; qty: number; participants: DetailParticipant[] } // qty>1이면 단가×수량 표시
 type DetailRound = { payerName: string; items: DetailItem[] }
 
 /** 공유 정산 페이지 '상세히 보기' — 차수→메뉴→참여자(이름·분담액). 어떤 정산이었는지 맥락. 기본 접힘. */
@@ -54,6 +54,11 @@ export function SettleDetails({ rounds }: { rounds: DetailRound[] }) {
                           {formatWon(it.amount)}
                         </span>
                       </div>
+                      {it.qty > 1 && (
+                        <p className="num mt-0.5 text-xs text-neutral-400 dark:text-neutral-500">
+                          단가 {formatWon(Math.round(it.amount / it.qty))} × {it.qty}
+                        </p>
+                      )}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <span className="text-xs text-neutral-500 dark:text-neutral-400">참여</span>
                         {it.participants.map((p, pi) => (

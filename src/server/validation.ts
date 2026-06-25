@@ -176,6 +176,7 @@ const itemizedBillObject = z.object({
               .object({
                 description: z.string().trim().max(40).optional(),
                 amount: z.number().int().positive().max(1_000_000_000),
+                qty: z.number().int().min(1).max(99).optional(), // 라인 수량(표시·복원용). 분담은 amount 기준.
                 participants: z
                   .array(z.number().int().min(0))
                   .min(1, '항목에 최소 1명이 필요합니다'),

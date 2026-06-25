@@ -44,7 +44,8 @@ export interface SettledTransfer {
 /** 표시 전용 — 공유 페이지 '상세히 보기'(차수·메뉴·참여자). 도메인 ExpenseRecord와 분리. */
 export interface SnapshotRoundItem {
   description: string // 메뉴명. RPC가 빈값을 '항목'으로 저장 → 표시 시 placeholder 폴백.
-  amount: number
+  amount: number // 라인 총액
+  quantity: number // 라인 수량(기본 1). 단가 = amount/quantity. 상세 표시용.
   participants: { id: string; amount: number }[] // 참여 멤버 id + 그 메뉴에서의 분담액
 }
 export interface SnapshotRound {
@@ -141,7 +142,10 @@ export async function createQuickSettle(
  *  + round 인덱스(RPC가 차수별 bill_id로 묶음). 생성·수정 공용. */
 function buildItemizedRpcItems(
   input: {
-    rounds: { payerIndex: number; items: { description?: string; amount: number; participants: number[] }[] }[]
+    rounds: {
+      payerIndex: number
+      items: { description?: string; amount: number; participants: number[]; qty?: number }[]
+    }[]
     unit: number
     absorberIndex?: number
   },
@@ -163,6 +167,7 @@ function buildItemizedRpcItems(
         paid_by_index: round.payerIndex,
         shares: aligned,
         round: r, // RPC가 같은 round끼리 같은 bill_id(=한 자리)로 묶음
+        quantity: it.qty ?? 1, // 라인 수량(표시·복원용). 분담엔 영향 0(amount가 총액).
       })
     })
   })
@@ -318,7 +323,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
       .order('created_at'),
     supa
       .from('expenses')
-      .select('id, amount, paid_by, description, bill_id, split_type, created_at')
+      .select('id, amount, paid_by, description, bill_id, split_type, created_at, quantity')
       .eq('group_id', group.id)
       .order('created_at'),
     supa.from('settlements').select('id, from_member, to_member, amount').eq('group_id', group.id),
@@ -361,6 +366,7 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
       round.items.push({
         description: e.description === '항목' ? '' : (e.description ?? ''),
         amount: e.amount,
+        quantity: e.quantity ?? 1,
         participants: (sharesByExpense.get(e.id) ?? []).map((s) => ({ id: s.memberId, amount: s.amount })),
       })
     }
@@ -414,6 +420,7 @@ export interface EditableItem {
   name: string
   amount: number
   among: boolean[]
+  qty?: number // 라인 수량(>1이면). 수정 폼이 단가×수량으로 복원.
 }
 
 /** 항목별 수정 시 차수(자리) 1개 — 낸 사람 + 그 안의 항목(메뉴)들. */
@@ -457,7 +464,7 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
       .order('created_at'),
     supa
       .from('expenses')
-      .select('id, description, amount, paid_by, split_type, bill_id')
+      .select('id, description, amount, paid_by, split_type, bill_id, quantity')
       .eq('group_id', group.id)
       .order('created_at'),
     supa.from('settlements').select('id').eq('group_id', group.id).limit(1),
@@ -503,6 +510,7 @@ export async function getEditableGroup(slug: string): Promise<EditableGroup | nu
         name: e.description === '항목' ? '' : e.description,
         amount: e.amount,
         among: memberIds.map((id) => set.has(id)),
+        qty: (e.quantity ?? 1) > 1 ? e.quantity : undefined,
       })
     }
     rounds = order.map((k) => byKey.get(k)!)

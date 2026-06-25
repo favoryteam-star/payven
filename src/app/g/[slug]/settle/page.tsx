@@ -101,6 +101,7 @@ export default async function SettlePage({ params }: Params) {
     items: r.items.map((it) => ({
       name: it.description,
       amount: it.amount,
+      qty: it.quantity,
       participants: it.participants.map((p) => ({ name: displayName(p.id), amount: p.amount })),
     })),
   }))
