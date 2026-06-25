@@ -117,6 +117,40 @@ export function roundingLeftover(amount: number, n: number, unit = 1): number {
 }
 
 /**
+ * 표시 전용: 저장된 분담을 '단위 없는 자연 균등분할'과 비교해, 멤버별 (실제 − 공정몫) 차액. 양수 = 잔돈을 더 떠안음.
+ * 흡수자가 '누구인지'를 멤버 정렬이 아니라 분담(멤버 id)에서 역산하기 위함 — 트랜잭션 동시생성이라 멤버 created_at이
+ * 동일해 읽기 순서(positional index)는 불안정하다. 분담 기반이라 순서·중복 이름에 흔들리지 않는다.
+ */
+export function roundingExtras(expenses: ExpenseRecord[]): Map<MemberId, number> {
+  const extra = new Map<MemberId, number>()
+  for (const e of expenses) {
+    const parts = e.shares
+    if (parts.length < 2) continue
+    const natural = splitByWeights(
+      e.amount,
+      parts.map((p) => ({ memberId: p.memberId, weight: 1 })),
+      { paidBy: e.paidBy },
+    )
+    const fair = new Map(natural.map((s) => [s.memberId, s.amount]))
+    for (const p of parts) {
+      extra.set(p.memberId, (extra.get(p.memberId) ?? 0) + (p.amount - (fair.get(p.memberId) ?? 0)))
+    }
+  }
+  return extra
+}
+
+/** 잔돈을 가장 많이 떠안은 1명(흡수자). 양수가 없으면 null. tie-break = id 오름차순(결정적). */
+export function topAbsorber(expenses: ExpenseRecord[]): { memberId: MemberId; extra: number } | null {
+  let best: { memberId: MemberId; extra: number } | null = null
+  for (const [memberId, extra] of roundingExtras(expenses)) {
+    if (extra > 0 && (!best || extra > best.extra || (extra === best.extra && compareId(memberId, best.memberId) < 0))) {
+      best = { memberId, extra }
+    }
+  }
+  return best
+}
+
+/**
  * 순잔액. net > 0 = 받을 사람(채권자), net < 0 = 낼 사람(채무자), 전체 합 = 0.
  */
 export function netBalances(

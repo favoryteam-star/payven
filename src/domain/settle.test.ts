@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { equalSplit, minimizeCashFlow, netBalances, roundingLeftover, splitByWeights } from './settle'
+import {
+  equalSplit,
+  minimizeCashFlow,
+  netBalances,
+  roundingExtras,
+  roundingLeftover,
+  splitByWeights,
+  topAbsorber,
+} from './settle'
 import type { ExpenseRecord, MemberId, SettlementRecord, Weight } from './types'
 
 const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0)
@@ -359,6 +367,47 @@ describe('roundingLeftover', () => {
       ),
       { numRuns: 300 },
     )
+  })
+})
+
+// 흡수자가 '누구인지'를 분담에서 역산(멤버 정렬·동명에 안 흔들림). 공유 페이지가 이걸로 사람을 찾는다.
+describe('topAbsorber / roundingExtras', () => {
+  it('잔돈을 더 받은 멤버를 정확히 찾음 (멤버 순서 무관, 분담 기반)', () => {
+    // 실제 버그 재현: 음식 20,000(균등 10,000/10,000) + 커피 3,702(나희진 1,000·민태욱 2,702=잔돈 흡수).
+    // → 흡수자는 '민태욱'이어야 함(나희진 아님). id 기반이라 멤버 순서·동명 영향 0.
+    const expenses: ExpenseRecord[] = [
+      { amount: 20000, paidBy: 'na', shares: [{ memberId: 'na', amount: 10000 }, { memberId: 'min', amount: 10000 }] },
+      { amount: 3702, paidBy: 'na', shares: [{ memberId: 'na', amount: 1000 }, { memberId: 'min', amount: 2702 }] },
+    ]
+    const top = topAbsorber(expenses)
+    expect(top?.memberId).toBe('min') // 커피 자연분할 1,851/1,851 → min +851
+    expect(top?.extra).toBe(851)
+    expect(sum([...roundingExtras(expenses).values()])).toBe(0) // 더 낸 만큼 남이 덜 냄
+  })
+
+  it('반올림 없으면(딱 떨어짐) null', () => {
+    const expenses: ExpenseRecord[] = [
+      { amount: 9000, paidBy: 'a', shares: equalSplit(9000, ['a', 'b', 'c'], 'a') },
+    ]
+    expect(topAbsorber(expenses)).toBeNull()
+  })
+
+  it('참여자 1명짜리 항목은 무시', () => {
+    expect(topAbsorber([{ amount: 30000, paidBy: '0', shares: [{ memberId: '2', amount: 30000 }] }])).toBeNull()
+  })
+
+  it('여러 항목에 걸쳐 흡수자 차액 누적', () => {
+    // 두 항목 모두 c가 천원 잔돈 흡수 → c가 최대 양수.
+    const mk = (amount: number, ids: MemberId[]): ExpenseRecord => ({
+      amount,
+      paidBy: 'a',
+      shares: splitByWeights(amount, ids.map((id) => ({ memberId: id, weight: 1 })), {
+        paidBy: 'a',
+        unit: 1000,
+        absorber: 'c',
+      }).filter((s) => s.amount > 0),
+    })
+    expect(topAbsorber([mk(10000, ['a', 'b', 'c']), mk(5000, ['a', 'c'])])?.memberId).toBe('c')
   })
 })
 

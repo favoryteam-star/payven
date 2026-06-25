@@ -1,7 +1,7 @@
 import 'server-only'
 import { nanoid } from 'nanoid'
 import { getAdminClient } from './db'
-import { equalSplit, minimizeCashFlow, netBalances, roundingLeftover, splitByWeights } from '@/domain/settle'
+import { equalSplit, minimizeCashFlow, netBalances, roundingLeftover, splitByWeights, topAbsorber } from '@/domain/settle'
 import type { ExpenseRecord, SettlementRecord } from '@/domain/types'
 import type {
   ItemizedBillInput,
@@ -421,13 +421,12 @@ export async function getGroupBySlug(slug: string): Promise<GroupSnapshot | null
     amount: s.amount,
   }))
 
-  // 단위 맞춤 '남은 금액' 흡수자 — 저장된 인덱스를 멤버(생성 순서)로 해석. leftover>0·인덱스 유효일 때만.
   const memberRows = membersRes.data ?? []
-  const absIdx = group.absorber_index
-  const absorber =
-    group.leftover_amount > 0 && absIdx !== null && absIdx >= 0 && absIdx < memberRows.length
-      ? { memberId: memberRows[absIdx].id, extra: group.leftover_amount }
-      : null
+  // 단위 맞춤 '남은 금액' 흡수자. 금액 = 저장된 leftover_amount(폼의 '남은 N원'), 사람 = 분담에서 역산(topAbsorber).
+  // 저장한 absorber_index는 안 쓴다 — 멤버를 한 트랜잭션에서 만들어 created_at이 동일 → 읽기 순서가 불안정해
+  // positional index가 엉뚱한 멤버를 가리킬 수 있다(중복 표시 이름이면 더). 분담 기반이라 순서·동명에 안 흔들림.
+  const absorberId = group.leftover_amount > 0 ? (topAbsorber(expenseRecords)?.memberId ?? null) : null
+  const absorber = absorberId ? { memberId: absorberId, extra: group.leftover_amount } : null
 
   return {
     group: {
