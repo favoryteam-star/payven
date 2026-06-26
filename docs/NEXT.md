@@ -273,6 +273,7 @@
 **📱 Android 출시 진행 상태:**
 - ✅ 홈택스 **영문 사업자등록증명** 발급: 상호 `makersbridge` · 대표 `NAHEEJIN`(나희진) · 주소 `74 Geulpo 2-ro, Gimpo-si, Gyeonggi-do, Republic of Korea` · 사업자 675-76-00551 · 간이과세자. (이 영문 상호·주소를 D-U-N-S·Play에 글자 그대로 복붙 = 3중 일치)
 - ✅ **D-U-N-S 신청 제출**(애플 무료폼 developer.apple.com/enroll/duns-lookup, 법인명 makersbridge·payven.kr·sole proprietorship). 접수확인 메일 옴(Tracking# 10505883 · Case# 10571821 · Request Key 34N7L2RU64). **⏳ 실제 D-U-N-S 번호 메일 대기**(별도 메일, 1~5영업일, 스팸함도 확인).
+  - **2026-06-26 재조회 = 정상 처리중 확인**: 애플 룩업폼 같은 정보로 다시 돌리니 "**이미 Dun & Bradstreet에 요청을 제출하셨습니다 · 최초 요청일(6/24)로부터 영업일 5일 이내 연락**" 안내 = 접수·심사중(취소/누락 아님). **예상 도착 ≈ 7/1(수)**(주말 제외 영업일 5일). 그때까지 대기 → 7/1 지나도 깜깜하면 그 화면의 **"Apple에 문의"** 링크로 문의(애플 공식 가이드도 "2주 경과 시 D&B 문의" support.dnb.com/?CUST=APPLEDEV). 콘솔 getCaptcha 401은 무관.
 - ✅ **PWABuilder manifest 통과** — SVG 아이콘 제거로 packaging critical 해소(`52f107a`), id/orientation 추가(`732e03e`). "Package For Stores" 활성·"ready for packaging". (SW 경고·스크린샷·categories 등은 선택, 패키징 안 막음.)
 - ✅ **Android 패키지 Download 클릭함**(Package ID `kr.payven.app` 확정·새 서명키) → **zip 받음**(.aab·.apk·signing.keystore·signing-key-info.txt·assetlinks.json·next-steps).
 
