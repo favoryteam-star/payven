@@ -59,7 +59,7 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
       const status = (e as { status?: number })?.status
       if (status !== 503 && status !== 429 && status !== 500) throw e
       console.warn(`[ocr] ${status} 재시도 ${i + 1}/${tries}`)
-      if (i < tries - 1) await new Promise((r) => setTimeout(r, 700 * (i + 1)))
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, 450 * (i + 1)))
     }
   }
   throw lastErr
@@ -80,6 +80,9 @@ export async function parseReceiptImage(imageBase64: string, mediaType: string):
         responseMimeType: 'application/json',
         responseSchema: RESPONSE_SCHEMA,
         temperature: 0,
+        // 영수증 추출은 추론이 필요 없는 단순 OCR → '생각' 끔(thinkingBudget:0)으로 지연 단축.
+        // Flash-Lite는 기본 off지만, 폴백 Flash는 기본 on(동적)이라 명시해야 폴백도 빠름.
+        thinkingConfig: { thinkingBudget: 0 },
       },
     })
   // Flash-Lite로 시도(재시도 포함). 끝까지 과부하(503/429)면 다음 모델(Flash)로 폴백.

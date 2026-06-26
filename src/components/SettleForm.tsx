@@ -421,14 +421,15 @@ export function SettleForm({
       }),
     )
   // ── 영수증 OCR ── 사진 → (서버) Gemini → {메뉴, 금액} → 차수 r의 메뉴로 채움.
-  // 사진은 1568px JPEG로 축소해 보냄(토큰·전송량 절감). 참여자는 전원 기본(사용자가 조정).
+  // 사진은 1280px JPEG로 축소해 보냄(업로드·입력 토큰 절감 → 인식 속도↑). 참여자는 전원 기본(사용자가 조정).
+  // 영수증 글자 인식에 1280px면 충분(원래 1568). 정확도 떨어지면 maxEdge를 1568로 되돌릴 것.
   const downscaleToBase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const img = new Image()
       const url = URL.createObjectURL(file)
       img.onload = () => {
         URL.revokeObjectURL(url)
-        const maxEdge = 1568
+        const maxEdge = 1280
         const scale = Math.min(1, maxEdge / Math.max(img.width, img.height))
         const w = Math.max(1, Math.round(img.width * scale))
         const h = Math.max(1, Math.round(img.height * scale))
@@ -438,7 +439,7 @@ export function SettleForm({
         const ctx = canvas.getContext('2d')
         if (!ctx) return reject(new Error('canvas'))
         ctx.drawImage(img, 0, 0, w, h)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
         resolve(dataUrl.split(',')[1] ?? '')
       }
       img.onerror = () => {
