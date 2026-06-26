@@ -60,11 +60,12 @@ Vercel Web Analytics(쿠키리스) + 커스텀 퍼널 이벤트(`lib/analytics.t
 ```
 방문(자동) → create_attempted → ( login_gate_shown | settlement_created )
 ```
-- **활성화율** = settlement_created / 방문(콜드, utm 분리)
-- **로그인 게이트 이탈** = login_gate_shown / create_attempted ← 게이트 레버 근거
-- 보강: Supabase로 생성 수·시각 직접 카운트(교차검증). viewer→creator는 트랙 A 실제 1건에서 눈으로 + DB.
-- 광고는 `payven.kr/?utm_source=...`로 직행 → 이벤트 source로 귀속.
-- ⚠️ 켜기: Vercel 대시보드에서 Web Analytics 활성화 필요(Hobby는 커스텀 이벤트 월 한도 있음 — 소규모 probe엔 충분).
+⚠️ **플랜 현실(Hobby, 2026-06-26 확인):** 커스텀 이벤트 3종은 **Vercel Pro 전용** → Hobby 대시보드 Events 패널엔 안 보임. **페이지뷰·Referrers·UTM Parameters는 Hobby에서 됨.** 그래서 Phase 0은 **Pro 없이** 아래 조합으로 측정한다(이벤트 코드는 유지 — Pro 켜는 순간 즉시 작동):
+- **활성화율 = Supabase 생성 수(분자) ÷ Vercel UTM 방문(분모).** 광고를 `payven.kr/?utm_source=naver`로 직행 → Vercel **UTM Parameters** 탭에서 그 source 방문 수.
+- **분자(정산 생성)**: Supabase `groups`(created_at·owner_id) 측정 창 기준 직접 카운트.
+- **로그인 게이트 이탈**: Hobby 직접 측정 불가 → **방문−생성 갭으로 추정**(대부분 게이트). 정밀 숫자 필요 시 한 달 Pro.
+- viewer→creator는 트랙 A 실제 1건에서 눈으로 + DB.
+- 켜기: Vercel → payven → Analytics → Enable(페이지뷰·UTM 무료).
 
 ## 솔직한 천장
 경쟁분석 = 일반 대중 대량 채택 확률 낮음(<20%), 좁은 틈새 생존 ~40%.
