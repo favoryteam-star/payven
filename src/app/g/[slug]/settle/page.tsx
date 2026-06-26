@@ -6,6 +6,7 @@ import { formatMonthDay } from '@/lib/datetime'
 import { minimizeCashFlow, netBalances } from '@/domain/settle'
 import { getGroupBySlug } from '@/server/queries'
 import { getAuthUser } from '@/server/auth'
+import { resolveDisplayNames } from '@/lib/displayNames'
 import { ShareButton } from '@/components/ShareButton'
 import { SettleBoard } from './_components/SettleBoard'
 import { SettleDetails } from './_components/SettleDetails'
@@ -23,11 +24,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   // 기본 모드명('빠른정산'/'항목별 정산')이면 제목에 ' 정산'을 안 붙임(중복 "빠른정산 정산" 방지).
   const customName = ['빠른정산', '항목별 정산'].includes(snap.group.name) ? null : snap.group.name
   const title = customName ? `${customName} 정산` : snap.group.name
-  // 설명 = 맥락 한 줄: "{낸 사람}님이 결제 · 총 N원 · N명". 받는 사람은 예금주 실명 우선.
-  const dispName = (id: string) => {
-    const m = snap.members.find((mm) => mm.id === id)
-    return m?.accountHolder || m?.name || '?'
-  }
+  // 설명 = 맥락 한 줄: "{낸 사람}님이 결제 · 총 N원 · N명". 받는 사람은 예금주 실명 우선(동명은 구분자).
+  const metaNames = resolveDisplayNames(snap.members)
+  const dispName = (id: string) => metaNames.get(id) ?? '?'
   const total = snap.expenses.reduce((sum, e) => sum + e.amount, 0)
   const payerIds = [...new Set(snap.expenses.map((e) => e.paidBy))]
   const payerText =
@@ -61,12 +60,10 @@ export default async function SettlePage({ params }: Params) {
   const canManageAll = !snap.group.ownerId || (!!user && user.id === snap.group.ownerId)
 
   const memberIds = snap.members.map((m) => m.id)
-  const memberById = new Map(snap.members.map((m) => [m.id, m]))
-  // 공유 페이지는 친구가 읽음 — 받는 사람은 예금주 실명으로 보여줌(멤버명이 '나'여도 누군지 명확).
-  const displayName = (id: string) => {
-    const m = memberById.get(id)
-    return m?.accountHolder || m?.name || '?'
-  }
+  // 공유 페이지는 친구가 읽음 — 받는 사람은 예금주 실명으로 보여줌(멤버명이 '나'여도 누군지 명확, ADR-015).
+  // 단, 예금주명이 다른 멤버의 멤버명과 같으면 '나희진 → 나희진' 자기송금처럼 보임 → 동명일 때만 구분자(lib/displayNames).
+  const nameMap = resolveDisplayNames(snap.members)
+  const displayName = (id: string) => nameMap.get(id) ?? '?'
   const net = netBalances(memberIds, snap.expenses, snap.settlements)
   const transfers = minimizeCashFlow(net)
   const total = snap.expenses.reduce((sum, e) => sum + e.amount, 0)
