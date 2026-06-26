@@ -21,7 +21,7 @@ export default function PrivacyPage() {
           <Wordmark />
         </div>
         <h1 className="mt-4 text-2xl font-bold tracking-tight">개인정보처리방침</h1>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">시행일: 2026년 6월 25일</p>
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">시행일: 2026년 6월 26일</p>
       </div>
 
       <div className="flex flex-col gap-7 text-[15px] leading-relaxed text-neutral-700 dark:text-neutral-300">
@@ -42,6 +42,10 @@ export default function PrivacyPage() {
               사용되며, 인식 처리 후 서버에 저장하지 않습니다.
             </li>
             <li><strong>자동 수집</strong>: 요청 IP 주소(악용 방지·요청 제한 목적), 일반 접속 로그.</li>
+            <li>
+              <strong>이용 통계(익명)</strong>: 서비스 개선을 위해 페이지 방문·정산 생성 등 집계 이벤트를 수집합니다.
+              쿠키를 사용하지 않으며 개인을 식별하는 정보는 포함하지 않습니다.
+            </li>
             <li>
               <strong>로그인 없이 공유 링크만 열어 볼 때</strong>는 별도의 개인정보를 수집하지 않습니다.
             </li>
@@ -72,7 +76,7 @@ export default function PrivacyPage() {
           <p className="mb-2">서비스 제공을 위해 다음 사업자의 인프라를 이용합니다. 이용자 데이터는 기능 제공 범위 내에서만 처리됩니다.</p>
           <ul className="flex list-disc flex-col gap-1.5 pl-5">
             <li><strong>Supabase</strong> — 데이터베이스 및 로그인 인증(서울 리전)</li>
-            <li><strong>Vercel</strong> — 웹 호스팅</li>
+            <li><strong>Vercel</strong> — 웹 호스팅 및 익명 이용 통계(Web Analytics, 쿠키 미사용)</li>
             <li><strong>Upstash</strong> — 요청 제한(IP 기반)</li>
             <li><strong>Google · Kakao</strong> — 소셜 로그인 인증</li>
             <li>

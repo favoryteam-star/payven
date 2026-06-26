@@ -18,6 +18,7 @@ import { IcoBack, IcoPlus } from '@/components/icons'
 import { Wordmark } from '@/components/Logo'
 import { ModeChips, type SettleMode } from '@/components/ModeChips'
 import { LoginSheet } from '@/components/LoginSheet'
+import { captureSource, trackEvent } from '@/lib/analytics'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { AccountField, EMPTY_INLINE, NEW_ACCOUNT, resolveAccount, useMyAccounts, type InlineAcct } from '@/components/AccountSelect'
 import { AbsorberGame } from '@/components/AbsorberGame'
@@ -175,6 +176,7 @@ export function SettleForm({
   // 마운트: 날짜 기본=오늘(비었을 때). 만들기는 로그인 왕복 draft 복원도(수정은 복원 없음).
   // ?resume=1은 OAuth 리다이렉트에서 사라질 수 있어 신뢰 못 함 → sessionStorage draft 존재로 복원 신호.
   useEffect(() => {
+    captureSource() // 유입 출처(utm) 보관 — 콜드 전환 측정용(로그인 왕복에도 유지)
     if (isEdit) {
       if (!initial?.eventDate) setEventDate(todayYmd())
       return
@@ -609,6 +611,7 @@ export function SettleForm({
     const resolved = resolveAccount(accounts, accountId, acct)
     if (resolved.error) return fail('account', resolved.error)
 
+    if (!isEdit) trackEvent('create_attempted', { mode }) // 콜드 전환 퍼널: 만들기 시도(검증 통과)
     startTransition(async () => {
       try {
         // 공유 필드. 낸 사람은 1/N=전체 1명(payerIndex), 항목별=차수마다(payload에 포함)라 여기 없음.
@@ -634,11 +637,13 @@ export function SettleForm({
             // 어떤 provider로 로그인했는지 모르니 선택 페이지로(강제하면 다른 계정 → 소유자 게이트 막힘).
             window.location.href = `/auth?next=${encodeURIComponent(`/g/${editSlug}/edit`)}`
           } else {
+            trackEvent('login_gate_shown', { mode }) // 콜드 이탈 진단: 만들기→로그인 게이트 노출
             loginReason.current = 'submit' // 정산하기 → 로그인 후 자동제출(복원+제출)
             setLoginPrompt(true)
           }
           return
         }
+        if (!isEdit) trackEvent('settlement_created', { mode }) // 콜드 전환 퍼널: 생성 성공(=활성화)
         router.push(`/g/${res.slug}/settle`)
       } catch (e) {
         setError(e instanceof Error ? e.message : '문제가 생겼어요. 잠시 후 다시 시도해 주세요.')

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
 
@@ -67,6 +68,8 @@ export default function RootLayout({
           {children}
         </div>
         <ServiceWorkerRegister />
+        {/* Vercel Web Analytics — 콜드 전환 퍼널 측정(쿠키리스). 커스텀 이벤트는 lib/analytics. */}
+        <Analytics />
       </body>
     </html>
   )
