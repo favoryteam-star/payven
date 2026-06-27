@@ -37,14 +37,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     title,
     description,
     robots: { index: false, follow: false },
-    // openGraph는 부모(layout) 것을 통째로 덮으므로 image·siteName까지 여기서 다시 명시.
+    // openGraph는 부모(layout) 것을 통째로 덮음. og:image는 같은 라우트의 opengraph-image.tsx가
+    // 정산별 동적 카드로 자동 주입(공유 훅 ②) → 여기선 images 생략(정적 og.png 안 씀).
     openGraph: {
       title,
       description,
       siteName: '페이븐',
       type: 'website',
       locale: 'ko_KR',
-      images: ['/og.png'],
     },
   }
 }
