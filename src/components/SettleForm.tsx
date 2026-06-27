@@ -1491,7 +1491,18 @@ export function SettleForm({
         }}
         onClose={() => setPadTarget(null)}
       />
-      <LoginSheet open={loginPrompt} onClose={() => setLoginPrompt(false)} onSelect={goLogin} />
+      <LoginSheet
+        open={loginPrompt}
+        onClose={() => setLoginPrompt(false)}
+        onSelect={goLogin}
+        // 만들기는 무로그인(게이트 제거, ADR-038) → 이 시트는 영수증 스캔 전용. 혜택을 파는 카피.
+        title={loginReason.current === 'scan' ? '영수증 스캔은 로그인 후 쓸 수 있어요' : '정산을 저장하려면 로그인이 필요해요'}
+        description={
+          loginReason.current === 'scan'
+            ? '로그인하면 사진 한 장으로 메뉴·금액이 자동 입력돼요. 입력한 내용은 그대로 이어져요.'
+            : '로그인하면 입력한 내용 그대로 이어져요.'
+        }
+      />
     </main>
   )
 }
