@@ -306,3 +306,12 @@
 - **변경:** validation(`updateNicknameSchema` ≤20)·auth(`resolveDisplayName`)·actions(`updateNicknameAction`+recent 본인 제외)·마이 `NicknameEditor`(인라인 수정, 16px)·홈 myName prop·SettleForm selfDefault. 마이그레이션·도메인·RPC 0.
 - **검증:** tsc·test 69·lint·build(server-only 누수0) + 프리뷰 비로그인 무회귀(홈 '내 이름'='나'·마이 200 로그인 CTA·콘솔0). 잔여(폰 스모크): 로그인 후 닉네임 수정→마이 반영·재로그인 보존·새 정산 '내 이름'=닉네임·공유 링크 실명 노출.
 - **상태:** 확정·검증(라이브 배포 대기).
+
+### ADR-038 — 만들기 무로그인 허용(익명 생성) = 성장 루프 마찰 제거 (M4 게이트 되돌림)
+- **맥락(2026-06-27, 전략 A "토스식 쐐기→확장"의 0단계):** 딥리서치(14에이전트) + 세션 분석 결론 = payven 성장 엔진은 **링크 루프**(정산 1건→참여자 N명 노출→그중 새 제작자=viewer→creator). M4 만들기 게이트([[ADR-029]] 인근)가 그 루프의 목을 조름 — 링크 받은 사람이 "나도 만들래" 해도 카카오/구글 로그인 벽에서 대부분 이탈. → **만들기를 무로그인 허용**(가치 먼저, 계정은 저장/내역 때만). 사용자 결정 = 옵션(a).
+- **변경 = 게이트 제거(1줄):** `quickSettleAction`/`addItemizedBillAction`에서 `if(!user) return {needLogin}` 삭제 → `createQuickSettle/addItemizedBill(input, user?.id ?? null)`. 미로그인 = **익명 생성(`owner_id` null)**. 계좌 저장(maybeSaveAccount)은 로그인 시만. `needLogin`은 이제 **'수정' 액션 전용**(소유자 가드).
+- **DB·스키마 무변경:** `owner_id` 이미 nullable, RPC `p_owner_id uuid default null`(0007/0011) → `ownerId ?? undefined`로 파라미터 생략 시 기본 null. **익명 그룹은 수정 RPC가 거부**(`p_owner_id is null` 가드, 0010) = 익명 생성자는 수정 불가(의도된 한계, 소유권 없음). 하드룰 6(withRateLimit+zod) 유지.
+- **측정 영향:** viewer→creator 신호가 '새 owner_id'→**'새 그룹(특히 익명 owner null)'**으로 바뀜(익명 생성자는 owner 없음). 광고/실제 자리 창의 신규 그룹 수로 측정.
+- **한계·후속(Phase 2):** 익명 정산은 내역에 안 남음(소유자 없음). 후속 = 결과 페이지 "로그인하면 이 정산도 내역에 저장" **claim**(owner null→user.id 부여) + ②결과 카드 공유 훅. 이번엔 마찰 제거만.
+- **검증:** tsc·test **90**·lint·build + **프리뷰 e2e(로그아웃 생성)**: 10,000원·2명 정산하기 → 로그인 시트 없이 `/g/.../settle` 도달, 콘솔 `create_attempted`→`settlement_created`(login_gate_shown 없음), 실DB `owner_id=null` 확인(테스트 그룹 정리). 
+- **상태:** 확정·라이브 대기.

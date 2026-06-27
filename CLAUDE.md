@@ -45,7 +45,7 @@
 
 ## 스코프
 **안 넣음:** 결제/송금레일·입금 자동확인·회비/총무·다중통화(V2)·푸시·실시간동기화(V2). 자세히는 PAYVEN_PLAN §11.
-**원래 비목표였으나 라이브:** 로그인(M4 카카오·구글, 만들기 게이트 / 보기·공유는 무로그인) · **영수증 OCR**(Gemini 2.5 Flash-Lite, 사진→메뉴·금액·수량 자동입력, `98cb7f0`). OCR 키 **`GEMINI_API_KEY`는 `src/server/ocr.ts` 단 한 파일(server-only)에서만** 읽고 `NEXT_PUBLIC_` 금지(하드룰 2와 같은 결) · 로그인 게이트(미로그인=Gemini 호출 전 차단=토큰 0)+`withRateLimit('ocr')`+zod · 이미지 미저장.
+**원래 비목표였으나 라이브:** 로그인(M4 카카오·구글; **만들기는 무로그인 허용**=익명 생성·`owner_id` null[[DECISIONS#ADR-038]], 저장/내역/수정만 로그인 / 보기·공유 무로그인) · **영수증 OCR**(Gemini 2.5 Flash-Lite, 사진→메뉴·금액·수량 자동입력, `98cb7f0`). OCR 키 **`GEMINI_API_KEY`는 `src/server/ocr.ts` 단 한 파일(server-only)에서만** 읽고 `NEXT_PUBLIC_` 금지(하드룰 2와 같은 결) · 로그인 게이트(미로그인=Gemini 호출 전 차단=토큰 0)+`withRateLimit('ocr')`+zod · 이미지 미저장.
 
 ## 변경 시 동기화
 구조/규칙을 바꾸면 이 파일 + `docs/ARCHITECTURE.md` + `docs/DECISIONS.md`를 같이 갱신(단일 출처 유지).
