@@ -226,6 +226,9 @@ export type UpdateItemizedBillInput = z.infer<typeof updateItemizedBillSchema>
 export const deleteGroupSchema = z.object({ slug: slugSchema })
 export type DeleteGroupInput = z.infer<typeof deleteGroupSchema>
 
+// 익명(무로그인 생성) 정산을 내 것으로 저장(claim). slug만(소유는 'owner null'일 때만 서버가 허용).
+export const claimGroupSchema = z.object({ slug: slugSchema })
+
 // 정산 이름 변경(내역) — 이름 식별이 목적이라 빈 이름은 거부(교체 ADR-022와 달리 비파괴).
 export const renameGroupSchema = z.object({
   slug: slugSchema,

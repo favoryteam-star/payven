@@ -314,6 +314,20 @@ export async function deleteGroup(ownerId: string, slug: string): Promise<{ ok: 
   return { ok: (count ?? 0) > 0 }
 }
 
+/** 익명 정산을 로그인 사용자 소유로 저장(claim, ADR-038 후속).
+ *  'owner_id is null'일 때만 갱신 → 이미 소유된(내 것/타인) 정산은 절대 못 가로챔(보안 가드).
+ *  claimed=false면 이미 owner 있음(이미 저장됐거나 타인). count=0도 정상(에러 아님). */
+export async function claimGroup(userId: string, slug: string): Promise<{ ok: true; claimed: boolean }> {
+  const supa = getAdminClient()
+  const { error, count } = await supa
+    .from('groups')
+    .update({ owner_id: userId }, { count: 'exact' })
+    .eq('slug', slug)
+    .is('owner_id', null)
+  if (error) throw new Error(error.message)
+  return { ok: true, claimed: (count ?? 0) > 0 }
+}
+
 /** 정산 이름 변경(내역). 본인 것만(owner_id 스코프). 비파괴 — name만 갱신, 자식·신원 불변. */
 export async function renameGroup(ownerId: string, slug: string, name: string): Promise<{ ok: boolean }> {
   const supa = getAdminClient()

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { withRateLimit } from '@/server/ratelimit'
 import {
   accountIdSchema,
+  claimGroupSchema,
   deleteGroupSchema,
   deleteMyAccountSchema,
   itemizedBillSchema,
@@ -25,6 +26,7 @@ import {
 } from '@/server/validation'
 import {
   addItemizedBill,
+  claimGroup,
   createMemberGroup,
   createQuickSettle,
   createUserAccount,
@@ -146,6 +148,18 @@ export const deleteGroupAction = withRateLimit(async (raw: unknown): Promise<Del
   const { slug } = deleteGroupSchema.parse(raw)
   const res = await deleteGroup(user.id, slug)
   if (!res.ok) return { ok: false, error: '삭제하지 못했어요' }
+  revalidatePath('/history')
+  return { ok: true }
+})
+
+// 익명(무로그인 생성) 정산을 내 것으로 저장(claim, ADR-038 후속). 서버가 'owner null'일 때만 갱신 →
+// 이미 소유된 정산은 못 가로챔(보안). 이미 owner 있어도(claimed=false) ok 반환(할 일 없음).
+export const claimGroupAction = withRateLimit(async (raw: unknown): Promise<DeleteResult> => {
+  const user = await getAuthUser()
+  if (!user) return { ok: false, needLogin: true }
+  const { slug } = claimGroupSchema.parse(raw)
+  await claimGroup(user.id, slug)
+  revalidatePath(`/g/${slug}/settle`)
   revalidatePath('/history')
   return { ok: true }
 })

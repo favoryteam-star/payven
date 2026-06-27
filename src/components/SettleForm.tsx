@@ -644,7 +644,15 @@ export function SettleForm({
           }
           return
         }
-        if (!isEdit) trackEvent('settlement_created', { mode }) // 콜드 전환 퍼널: 생성 성공(=활성화)
+        if (!isEdit) {
+          trackEvent('settlement_created', { mode }) // 콜드 전환 퍼널: 생성 성공(=활성화)
+          // 내가 만든 정산 표시 → 익명 생성이면 결과 페이지가 '내역에 저장(claim)' 유도(ADR-038 후속).
+          try {
+            localStorage.setItem(`payven:mine:${res.slug}`, '1')
+          } catch {
+            /* 스토리지 차단 무시 */
+          }
+        }
         router.push(`/g/${res.slug}/settle`)
       } catch (e) {
         setError(e instanceof Error ? e.message : '문제가 생겼어요. 잠시 후 다시 시도해 주세요.')

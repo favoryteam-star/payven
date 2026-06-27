@@ -11,6 +11,7 @@ import { ShareButton } from '@/components/ShareButton'
 import { SettleBoard } from './_components/SettleBoard'
 import { SettleDetails } from './_components/SettleDetails'
 import { SettleBackLink } from './_components/SettleBackLink'
+import { ClaimBanner } from './_components/ClaimBanner'
 
 const loadGroup = cache(getGroupBySlug)
 
@@ -149,6 +150,11 @@ export default async function SettlePage({ params }: Params) {
       />
 
       {showDetails && <SettleDetails rounds={detailRounds} absorber={absorber} />}
+
+      {/* 익명 생성자에게 '내역에 저장(claim)' 유도 — 본인이 만든 익명 정산일 때만(localStorage 마커). */}
+      <div className="mt-6">
+        <ClaimBanner slug={slug} isAnon={!snap.group.ownerId} isLoggedIn={!!user} />
+      </div>
 
       <div className="mt-auto pt-8">
         <ShareButton title={`${snap.group.name} 정산`} />
