@@ -201,12 +201,14 @@
 
 - **전략 정본 = [`docs/growth-plan.md`](./growth-plan.md) + [`docs/demand-test.md`](./demand-test.md).** 핵심: 엔진=링크 루프(K↑), 레버=로그인 게이트, 검색은 비엔진(네이버+구글 실측), tool-first, 단계별 게이트. 딥리서치 결론: 새 데일리 유틸 후보 8개 전부 적대검증 탈락(거인 점유) → **새 앱 도박 말고 Payven 루프 강화가 EV 3~4배.**
 - **✅ 라이브: 콜드 전환 측정**(`f8e4ee4`, [[gemini-ocr]] 아님): Vercel Web Analytics(쿠키리스 pageview·utm) + 커스텀 이벤트(create_attempted/login_gate_shown/settlement_created, `lib/analytics`). ⚠️ **Hobby 현실: 커스텀 이벤트·UTM 탭 둘 다 Pro/Plus 유료** → 무료로는 **페이지뷰+Referrers**만. 그래서 측정 = **Supabase 신규 그룹(분자) ÷ 시간창 방문(분모, 유기적~0이라 시간창=광고분리)**. 대시보드 Enable 됨(폰 방문으로 확인).
-- **✅ 라이브 대기: 만들기 무로그인 허용**([[DECISIONS#ADR-038]]): M4 게이트 제거 — 미로그인=익명 생성(owner null). 로그인 시트 없이 생성·공유(프리뷰 e2e+실DB owner_id null 확인). **루프 마찰 제거 = 트랙 A의 1번 레버.** 측정 신호 = '새 owner'→'새 그룹(익명 포함)'.
+- **✅ 트랙 A ① 만들기 무로그인 허용**([[DECISIONS#ADR-038]], `6ec715d`): M4 게이트 제거 — 미로그인=익명 생성(owner null). 로그인 시트 없이 생성·공유(프리뷰 e2e+실DB owner_id null 확인). **루프 마찰 제거 = 1번 레버.** 측정 신호 = '새 owner'→'새 그룹(익명 포함)'. + 영수증 스캔 로그인은 유지(유료 API)하되 **혜택 카피**로(`22fe20e`).
+- **✅ 트랙 A ② 동적 OG 카드**(`7793dc8`): 정산 링크를 카톡에 붙이면 뜨는 Wrapped식 브랜드 카드(`settle/opengraph-image.tsx`, next/og+Pretendard OTF). 제목·총액·N명·결제자·"각자 얼마 보낼지 확인". 실데이터 PNG 렌더 검증(한글 정상). **공유 훅 = 퍼지는 힘.**
+- **✅ 트랙 A ③ claim**(`99fbfa8`): 익명 생성자에게 결과 화면 "이 정산 내역에 저장할까요?" → 로그인하면 owner 부여(`claimGroup`, owner-null 가드). 마커=localStorage(본인만, viewer엔 안 뜸). **가치 순간에 계정 전환 = 토스식 쌓이는 유저.**
 - **✅ 라이브: OCR 속도**(`0258355`): 이미지 1280px·thinking off·재시도 450 — 폰 재검증 잔여(속도+정확도).
-- **▶ 다음 할 일(트랙 A 이어서):** ②**결과 카드 = 공유 산출물 훅**(Wordle/Wrapped식, 카톡 포워드되게) ③**claim**(결과 페이지서 로그인→이 익명 정산도 내역 저장) → 그다음 **실제 정산 1건**(곧 있을 자리)으로 루프 측정(새 그룹 수·viewer→creator). 광고는 보류(사장님 결정).
+- **▶ 다음 할 일:** **실제 정산 1건**(곧 있을 자리)으로 루프 측정(새 그룹 수·viewer→creator·공유). 광고는 보류(사장님 결정). 트랙 A 후속(선택): 결과 board 자체 스크린샷 최적화·재참여 넛지(채널 제약). **폰 스모크 잔여:** 무로그인 생성→claim 왕복·OG 카드 카톡 실측·OCR 속도.
 - **잔여(이전):** D-U-N-S 번호 메일 ~7/1 대기 → Play. 계정삭제 실삭제 폰 스모크.
 
-라이브 = `0258355`(+ ADR-038 배포 대기).
+라이브 = `99fbfa8`.
 
 ---
 
