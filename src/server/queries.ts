@@ -136,7 +136,7 @@ function quickSharesArray(input: {
 
 export async function createQuickSettle(
   input: QuickSettleInput,
-  ownerId: string,
+  ownerId: string | null, // 무로그인 생성이면 null(owner_id 컬럼 nullable) — 만들기 마찰 제거
 ): Promise<{ slug: string }> {
   const supa = getAdminClient()
   const slug = nanoid(21)
@@ -151,7 +151,7 @@ export async function createQuickSettle(
     p_paid_by_index: input.payerIndex,
     p_shares: sharesArr,
     p_description: input.description ?? '',
-    p_owner_id: ownerId,
+    p_owner_id: ownerId ?? undefined, // null이면 파라미터 생략 → RPC 기본값(null) = 익명 생성
     // 받는 사람(=나, 멤버 0) 계좌(선택). RPC가 멤버 0에 저장.
     p_acct_bank: input.account?.bankName,
     p_acct_no: input.account?.accountNo,
@@ -206,7 +206,7 @@ function buildItemizedRpcItems(
  */
 export async function addItemizedBill(
   input: ItemizedBillInput,
-  ownerId: string,
+  ownerId: string | null, // 무로그인 생성이면 null(owner_id 컬럼 nullable) — 만들기 마찰 제거
 ): Promise<{ slug: string }> {
   const supa = getAdminClient()
   const slug = nanoid(21)
@@ -223,7 +223,7 @@ export async function addItemizedBill(
     p_name: name,
     p_member_names: input.members,
     p_items: items,
-    p_owner_id: ownerId,
+    p_owner_id: ownerId ?? undefined, // null이면 파라미터 생략 → RPC 기본값(null) = 익명 생성
     // 받는 사람(=나, 멤버 0) 계좌(선택). RPC가 멤버 0에 저장.
     p_acct_bank: input.account?.bankName,
     p_acct_no: input.account?.accountNo,

@@ -51,7 +51,8 @@ import { getAuthUser, getSupabaseAuth, resolveDisplayName } from '@/server/auth'
 import { parseReceiptImage } from '@/server/ocr'
 
 // 무로그인 공개 write 액션 → withRateLimit + zod 필수(CLAUDE.md 하드룰 6).
-// 만들기 = 로그인 게이트: 미로그인이면 needLogin 신호(클라가 입력값 보존 후 로그인으로). 보기는 무로그인 유지.
+// 만들기 = 무로그인 허용(마찰 제거 = 성장 루프, ADR-038). 미로그인이면 익명 생성(owner_id null) →
+// 결과·공유 바로. 저장/내역/계좌는 로그인에서만. (needLogin은 이제 '수정' 액션 전용 — 소유자 가드.)
 type CreateResult = { slug: string } | { needLogin: true }
 
 // 인라인으로 직접 입력한 계좌면 정산 시 내 저장 계좌에 추가(다음부턴 자동 채움).
@@ -73,20 +74,18 @@ async function maybeSaveAccount(
 }
 
 export const quickSettleAction = withRateLimit(async (raw: unknown): Promise<CreateResult> => {
-  const user = await getAuthUser()
-  if (!user) return { needLogin: true }
+  const user = await getAuthUser() // 미로그인 OK — 익명 생성(owner_id null)
   const input = quickSettleSchema.parse(raw)
-  const result = await createQuickSettle(input, user.id)
-  await maybeSaveAccount(user.id, input.account, input.saveAccount)
+  const result = await createQuickSettle(input, user?.id ?? null)
+  if (user) await maybeSaveAccount(user.id, input.account, input.saveAccount) // 계좌 저장은 로그인만
   return result
 })
 
 export const addItemizedBillAction = withRateLimit(async (raw: unknown): Promise<CreateResult> => {
-  const user = await getAuthUser()
-  if (!user) return { needLogin: true }
+  const user = await getAuthUser() // 미로그인 OK — 익명 생성(owner_id null)
   const input = itemizedBillSchema.parse(raw)
-  const result = await addItemizedBill(input, user.id)
-  await maybeSaveAccount(user.id, input.account, input.saveAccount)
+  const result = await addItemizedBill(input, user?.id ?? null)
+  if (user) await maybeSaveAccount(user.id, input.account, input.saveAccount) // 계좌 저장은 로그인만
   return result
 })
 
