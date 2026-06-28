@@ -886,7 +886,7 @@ export function SettleForm({
             <h1>
               <Wordmark />
             </h1>
-            <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">술값·밥값, 계산기 대신 1초 정산</p>
+            <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">안 마신 술값 빼고, 누가 뭐 먹었는지까지 딱 나눠요</p>
           </div>
           <ThemeToggle />
         </header>

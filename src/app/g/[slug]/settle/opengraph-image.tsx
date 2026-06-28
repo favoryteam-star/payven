@@ -33,6 +33,9 @@ export default async function Image({ params }: Params) {
   const name = snap && !isDefault ? snap.group.name : ''
   const total = snap ? snap.expenses.reduce((s, e) => s + e.amount, 0) : 0
   const memberCount = snap ? snap.members.length : 0
+  // 항목별이면 1/N 카드와 구별되게 메뉴 수·'사람마다 다르게' 신호를 노출(추가 쿼리 0, snap에 이미 있음).
+  const isItemized = !!snap?.isItemized
+  const menuCount = snap ? snap.rounds.reduce((s, r) => s + r.items.length, 0) : 0
   let payerText = ''
   if (snap) {
     const names = resolveDisplayNames(snap.members)
@@ -44,7 +47,9 @@ export default async function Image({ params }: Params) {
           ? '여러 명이 결제'
           : ''
   }
-  const subLine = [memberCount ? `${memberCount}명` : '', payerText].filter(Boolean).join(' · ')
+  const subLine = isItemized
+    ? [memberCount ? `${memberCount}명` : '', menuCount ? `메뉴 ${menuCount}개` : '', '사람마다 다르게'].filter(Boolean).join(' · ')
+    : [memberCount ? `${memberCount}명` : '', payerText].filter(Boolean).join(' · ')
 
   return new ImageResponse(
     (
@@ -83,7 +88,9 @@ export default async function Image({ params }: Params) {
 
         {/* 푸터 = 호기심 유발 + 무가입 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: 36 }}>
-          <div style={{ display: 'flex', opacity: 0.95 }}>각자 얼마 보낼지 링크에서 확인 →</div>
+          <div style={{ display: 'flex', opacity: 0.95 }}>
+            {isItemized ? '내 메뉴만큼만 보낼지 링크에서 확인 →' : '각자 얼마 보낼지 링크에서 확인 →'}
+          </div>
           <div style={{ display: 'flex', opacity: 0.8 }}>무가입 · payven.kr</div>
         </div>
       </div>

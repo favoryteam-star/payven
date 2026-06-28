@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: '페이븐 — 1초 정산',
+    name: '페이븐 — 복잡한 정산도 링크 하나로',
     short_name: '페이븐',
-    description: '링크로 끝내는 더치페이. 술값·밥값, 계산기 대신 페이븐.',
+    description: '안 마신 술값은 빼고, 메뉴별·차수별 복잡한 정산도 링크 하나로. 카톡에 붙여넣으면 끝.',
     id: '/',
     start_url: '/',
     display: 'standalone',

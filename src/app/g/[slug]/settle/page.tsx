@@ -32,7 +32,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const payerIds = [...new Set(snap.expenses.map((e) => e.paidBy))]
   const payerText =
     payerIds.length === 1 ? `${dispName(payerIds[0])}님이 결제` : payerIds.length > 1 ? '여러 명이 결제' : null
-  const description = `${payerText ? payerText + ' · ' : ''}총 ${formatWon(total)} · ${snap.members.length}명`
+  // 항목별이면 '메뉴별로 각자 먹은 만큼'을 앞세워 1/N 링크와 미리보기 텍스트를 구별(차별 신호).
+  const description = snap.isItemized
+    ? `메뉴별로 각자 먹은 만큼 · 총 ${formatWon(total)} · ${snap.members.length}명`
+    : `${payerText ? payerText + ' · ' : ''}총 ${formatWon(total)} · ${snap.members.length}명`
 
   return {
     title,

@@ -6,15 +6,15 @@ import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
 export const metadata: Metadata = {
   // og:image 등 상대경로를 절대 URL로 — 카카오/슬랙 등 스크래퍼가 정확히 가져가게.
   metadataBase: new URL('https://payven.kr'),
-  title: '페이븐 — 1초 정산',
-  description: '링크로 끝내는 더치페이. 술값·밥값, 계산기 대신 페이븐.',
+  title: '페이븐 — 복잡한 정산도 링크 하나로',
+  description: '안 마신 술값은 빼고, 메뉴별·차수별 복잡한 정산도 링크 하나로. 카톡에 붙여넣으면 끝.',
   // 공유 링크 미리보기(OG). 정산 페이지는 generateMetadata가 제목·설명을 덮어씀.
   openGraph: {
     type: 'website',
     siteName: '페이븐',
     locale: 'ko_KR',
-    title: '페이븐 — 1초 정산',
-    description: '링크로 끝내는 더치페이. 술값·밥값, 계산기 대신 페이븐.',
+    title: '페이븐 — 복잡한 정산도 링크 하나로',
+    description: '안 마신 술값은 빼고, 메뉴별·차수별 복잡한 정산도 링크 하나로. 카톡에 붙여넣으면 끝.',
     images: ['/og.png'],
   },
   twitter: { card: 'summary_large_image' },

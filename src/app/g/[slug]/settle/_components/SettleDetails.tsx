@@ -10,9 +10,9 @@ type DetailRound = { payerName: string; items: DetailItem[] }
 // 단위 맞춤으로 잔돈을 더 떠안은 사람(이름·차액). 없으면 null. page가 분담액에서 역산해 넘김.
 type Absorber = { name: string; extra: number }
 
-/** 공유 정산 페이지 '상세히 보기' — 차수→메뉴→참여자(이름·분담액). 어떤 정산이었는지 맥락. 기본 접힘. */
+/** 공유 정산 '누가 뭘 먹었는지' — 차수→메뉴→참여자(이름·분담액). 항목별 정산의 핵심 가치(안 먹은 건 안 냄)라 기본 펼침. */
 export function SettleDetails({ rounds, absorber }: { rounds: DetailRound[]; absorber?: Absorber | null }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const multi = rounds.length > 1 // 자리가 1개뿐이면 '1차' 라벨 생략(모임 규모 과장 방지)
 
   return (
@@ -23,7 +23,7 @@ export function SettleDetails({ rounds, absorber }: { rounds: DetailRound[]; abs
         aria-expanded={open}
         className="text-sm font-medium text-neutral-500 underline-offset-2 transition hover:underline dark:text-neutral-400"
       >
-        {open ? '접기' : '상세히 보기'}
+        {open ? '접기' : '🧾 누가 뭘 먹었는지 보기'}
       </button>
 
       {open && (
