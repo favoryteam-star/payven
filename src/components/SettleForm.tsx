@@ -140,7 +140,7 @@ export function SettleForm({
   // 로그인 안내를 연 이유. 'submit'=정산하기(복원 후 자동제출) / 'scan'=영수증 스캔(복원만, 자동제출 X).
   const loginReason = useRef<'submit' | 'scan'>('submit')
   const [autoSubmit, setAutoSubmit] = useState(false)
-  const [wip, setWip] = useState<{ savedAt: number; data: Record<string, unknown> } | null>(null) // 작성 중 초안(이어서 작성) 배너
+  const [wip, setWip] = useState<{ savedAt: number } | null>(null) // 이어서 작성 중(자동 복원) 표시
   const [pending, startTransition] = useTransition()
 
   // 멤버 입력에서 엔터 → 다음 칸으로(마지막이면 자동 추가). focusMember가 set되면 해당 칸에 포커스.
@@ -228,14 +228,16 @@ export function SettleForm({
       }
       return
     }
-    // ② 작성 중 초안(localStorage·폰 닫았다 열어도 유지) — 배너로 '이어서/새로'를 묻는다. 7일 지나면 폐기.
+    // ② 작성 중 초안(localStorage·폰 닫았다 열어도 유지) — 다시 열면 자동 복원(빈 폼 X) + '이어서 작성 중' 표시. 7일 지나면 폐기.
     try {
       const rawWip = localStorage.getItem(WIP_KEY)
       if (rawWip) {
         const d = JSON.parse(rawWip)
         const savedAt = typeof d?.savedAt === 'number' ? d.savedAt : 0
-        if (Date.now() - savedAt < 7 * 24 * 3600 * 1000) setWip({ savedAt, data: d })
-        else localStorage.removeItem(WIP_KEY)
+        if (Date.now() - savedAt < 7 * 24 * 3600 * 1000) {
+          applyDraft(d) // 자동 복원 — 1차가 그대로 채워져 있게(reset처럼 보이지 않게)
+          setWip({ savedAt })
+        } else localStorage.removeItem(WIP_KEY)
       }
     } catch {
       /* 손상 무시 */
@@ -252,18 +254,12 @@ export function SettleForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSubmit, accounts])
 
-  // 작성 중 입력을 로컬에 자동 저장 → 1차·2차가 시간차로 진행돼도 폰을 닫았다 열어 '이어서 작성'.
-  // 만들기에서만, 금액/메뉴가 실제 들어갔을 때만(빈 폼이 배너를 띄우지 않게). 생성 성공·새로시작 시 비움.
+  // 작성 중 입력을 로컬에 자동 저장 → 1차·2차가 시간차로 진행돼도 폰을 닫았다 열면 자동 복원.
+  // 만들기에서만, 금액/메뉴가 실제 들어갔을 때만. 빈 폼일 땐 삭제 안 함(마운트 직후 빈 상태가 초안 지우는 레이스 방지).
+  // 비우기는 생성 성공·새 정산 시작·7일 만료가 담당.
   useEffect(() => {
     if (isEdit) return
     const hasContent = amount > 0 || rounds.some((rd) => rd.items.some((it) => it.amount > 0 || it.name.trim()))
-    if (wip) {
-      // '이어서?' 배너가 떠 있는 동안 새 입력을 시작하면 새로 시작으로 간주(배너 닫고 새 내용 저장).
-      if (hasContent) setWip(null)
-      return
-    }
-    // 빈 폼일 땐 삭제 안 함 — 마운트 직후 빈 상태가 '방금 감지한 초안'을 지우는 레이스 방지.
-    // 비우기는 생성 성공·새로 시작·7일 만료가 담당.
     try {
       if (hasContent)
         localStorage.setItem(
@@ -273,20 +269,16 @@ export function SettleForm({
     } catch {
       /* 스토리지 차단 무시 */
     }
-  }, [isEdit, wip, mode, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct])
+  }, [isEdit, mode, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct])
 
-  // 이어서 작성(초안 복원) / 새로 시작(초안 폐기).
-  const resumeWip = () => {
-    if (wip) applyDraft(wip.data)
-    setWip(null)
-  }
-  const dismissWip = () => {
+  // 새 정산 시작 — 자동 복원된 초안을 버리고 빈 폼으로(리로드로 확실히 초기화).
+  const startFresh = () => {
     try {
       localStorage.removeItem(WIP_KEY)
     } catch {
       /* 무시 */
     }
-    setWip(null)
+    window.location.href = '/'
   }
 
   // 엔터로 추가/이동 후 해당 멤버 입력에 포커스
@@ -965,31 +957,20 @@ export function SettleForm({
         </header>
       )}
 
-      {/* 이어서 작성 — 1차만 입력하고 닫았다 다시 연 경우 등, 작성 중이던 초안을 복원/새로 선택. */}
+      {/* 이어서 작성 중 — 닫았다 다시 열면 초안이 자동 복원됨(빈 폼 X). 새로 만들려면 '새 정산 시작'. */}
       {wip && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-3 dark:border-brand/40 dark:bg-brand/10">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-brand-700 dark:text-brand">작성 중이던 정산이 있어요</p>
-            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-              {savedAgo(wip.savedAt)} 저장 · 이어서 차수를 더할 수 있어요
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={dismissWip}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-neutral-500 transition active:scale-95 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-            >
-              새로 시작
-            </button>
-            <button
-              type="button"
-              onClick={resumeWip}
-              className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white transition active:scale-95"
-            >
-              이어서 작성
-            </button>
-          </div>
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-2.5 dark:border-brand/40 dark:bg-brand/10">
+          <p className="min-w-0 truncate text-sm">
+            <span className="font-semibold text-brand-700 dark:text-brand">이어서 작성 중</span>
+            <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">{savedAgo(wip.savedAt)} 저장</span>
+          </p>
+          <button
+            type="button"
+            onClick={startFresh}
+            className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-neutral-500 transition active:scale-95 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
+          >
+            새 정산 시작
+          </button>
         </div>
       )}
 
