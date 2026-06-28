@@ -61,6 +61,19 @@ function formatDateDisplay(ymd: string): string {
   return `${y}. ${Number(m)}. ${Number(d)}.`
 }
 
+// 작성 중 초안(이어서 작성) 로컬 키. 로그인 왕복 draft(sessionStorage·일회성)와 달리 localStorage(영속).
+const WIP_KEY = 'payven:draft:wip'
+
+// 초안 저장 시각 → 'N분/시간/일 전'(이어서 작성 배너용).
+function savedAgo(ts: number): string {
+  const min = Math.floor((Date.now() - ts) / 60000)
+  if (min < 1) return '방금'
+  if (min < 60) return `${min}분 전`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}시간 전`
+  return `${Math.floor(hr / 24)}일 전`
+}
+
 // 영수증 스캔 버튼(촬영/앨범 공용) pill 스타일. 투명 input 오버레이를 담으려 relative+overflow-hidden.
 const OCR_PILL =
   'relative inline-flex cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-1.5 text-sm font-medium text-brand-700 transition active:scale-95 hover:border-brand dark:border-brand/40 dark:text-brand'
@@ -127,6 +140,7 @@ export function SettleForm({
   // 로그인 안내를 연 이유. 'submit'=정산하기(복원 후 자동제출) / 'scan'=영수증 스캔(복원만, 자동제출 X).
   const loginReason = useRef<'submit' | 'scan'>('submit')
   const [autoSubmit, setAutoSubmit] = useState(false)
+  const [wip, setWip] = useState<{ savedAt: number; data: Record<string, unknown> } | null>(null) // 작성 중 초안(이어서 작성) 배너
   const [pending, startTransition] = useTransition()
 
   // 멤버 입력에서 엔터 → 다음 칸으로(마지막이면 자동 추가). focusMember가 set되면 해당 칸에 포커스.
@@ -173,7 +187,23 @@ export function SettleForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts])
 
-  // 마운트: 날짜 기본=오늘(비었을 때). 만들기는 로그인 왕복 draft 복원도(수정은 복원 없음).
+  // draft(로그인 왕복·이어서 작성) 공용 복원 — 필드만 채운다(자동제출 여부는 호출부에서).
+  const applyDraft = (d: Record<string, unknown>) => {
+    const m = d.mode
+    if (m === 'quick' || m === 'items' || m === 'shoot') setMode(m)
+    if (typeof d.title === 'string') setTitle(d.title)
+    if (typeof d.amount === 'number') setAmount(d.amount)
+    if (Array.isArray(d.members)) setMembers(d.members as string[])
+    if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
+    if (typeof d.winnerIndex === 'number') setWinnerIndex(d.winnerIndex)
+    if (typeof d.unit === 'number') setUnit(d.unit)
+    if (typeof d.absorberIndex === 'number') setAbsorberIndex(d.absorberIndex)
+    if (typeof d.eventDate === 'string') setEventDate(d.eventDate)
+    if (Array.isArray(d.rounds)) setRounds(d.rounds as Round[])
+    if (d.acct && typeof d.acct === 'object') setAcct(d.acct as InlineAcct)
+  }
+
+  // 마운트: 날짜 기본=오늘. 만들기는 ①로그인 왕복 draft(즉시 복원+자동제출) ②작성 중 초안(이어서 작성 배너).
   // ?resume=1은 OAuth 리다이렉트에서 사라질 수 있어 신뢰 못 함 → sessionStorage draft 존재로 복원 신호.
   useEffect(() => {
     captureSource() // 유입 출처(utm) 보관 — 콜드 전환 측정용(로그인 왕복에도 유지)
@@ -184,26 +214,31 @@ export function SettleForm({
     setEventDate(todayYmd()) // 기본 = 오늘(클라 로컬). draft 있으면 아래에서 덮어씀.
     const params = new URLSearchParams(window.location.search)
     if (params.get('resume') === '1') window.history.replaceState(null, '', '/')
+    // ① 로그인 왕복 draft(sessionStorage·이 탭 한정·일회성) — 있으면 복원하고 끝(이어서 배너는 건너뜀).
     const raw = sessionStorage.getItem('payven:draft:create')
-    if (!raw) return
-    sessionStorage.removeItem('payven:draft:create')
+    if (raw) {
+      sessionStorage.removeItem('payven:draft:create')
+      try {
+        const d = JSON.parse(raw)
+        applyDraft(d)
+        // 스캔 때문에 로그인한 거면 자동제출 X(입력만 복원). 그 외(정산하기)는 자동제출.
+        if (d.reason !== 'scan') setAutoSubmit(true)
+      } catch {
+        /* 손상된 draft 무시 */
+      }
+      return
+    }
+    // ② 작성 중 초안(localStorage·폰 닫았다 열어도 유지) — 배너로 '이어서/새로'를 묻는다. 7일 지나면 폐기.
     try {
-      const d = JSON.parse(raw)
-      if (d.mode === 'quick' || d.mode === 'items' || d.mode === 'shoot') setMode(d.mode)
-      if (typeof d.title === 'string') setTitle(d.title)
-      if (typeof d.amount === 'number') setAmount(d.amount)
-      if (Array.isArray(d.members)) setMembers(d.members)
-      if (typeof d.payerIndex === 'number') setPayerIndex(d.payerIndex)
-      if (typeof d.winnerIndex === 'number') setWinnerIndex(d.winnerIndex)
-      if (typeof d.unit === 'number') setUnit(d.unit)
-      if (typeof d.absorberIndex === 'number') setAbsorberIndex(d.absorberIndex)
-      if (typeof d.eventDate === 'string') setEventDate(d.eventDate)
-      if (Array.isArray(d.rounds)) setRounds(d.rounds)
-      if (d.acct && typeof d.acct === 'object') setAcct(d.acct)
-      // 스캔 때문에 로그인한 거면 자동제출하지 않음(입력만 복원 → 사용자가 스캔 이어서). 그 외(정산하기)는 자동제출.
-      if (d.reason !== 'scan') setAutoSubmit(true)
+      const rawWip = localStorage.getItem(WIP_KEY)
+      if (rawWip) {
+        const d = JSON.parse(rawWip)
+        const savedAt = typeof d?.savedAt === 'number' ? d.savedAt : 0
+        if (Date.now() - savedAt < 7 * 24 * 3600 * 1000) setWip({ savedAt, data: d })
+        else localStorage.removeItem(WIP_KEY)
+      }
     } catch {
-      /* 손상된 draft 무시 */
+      /* 손상 무시 */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -216,6 +251,43 @@ export function SettleForm({
     submit()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSubmit, accounts])
+
+  // 작성 중 입력을 로컬에 자동 저장 → 1차·2차가 시간차로 진행돼도 폰을 닫았다 열어 '이어서 작성'.
+  // 만들기에서만, 금액/메뉴가 실제 들어갔을 때만(빈 폼이 배너를 띄우지 않게). 생성 성공·새로시작 시 비움.
+  useEffect(() => {
+    if (isEdit) return
+    const hasContent = amount > 0 || rounds.some((rd) => rd.items.some((it) => it.amount > 0 || it.name.trim()))
+    if (wip) {
+      // '이어서?' 배너가 떠 있는 동안 새 입력을 시작하면 새로 시작으로 간주(배너 닫고 새 내용 저장).
+      if (hasContent) setWip(null)
+      return
+    }
+    // 빈 폼일 땐 삭제 안 함 — 마운트 직후 빈 상태가 '방금 감지한 초안'을 지우는 레이스 방지.
+    // 비우기는 생성 성공·새로 시작·7일 만료가 담당.
+    try {
+      if (hasContent)
+        localStorage.setItem(
+          WIP_KEY,
+          JSON.stringify({ savedAt: Date.now(), mode, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct }),
+        )
+    } catch {
+      /* 스토리지 차단 무시 */
+    }
+  }, [isEdit, wip, mode, title, amount, members, payerIndex, winnerIndex, unit, absorberIndex, eventDate, rounds, acct])
+
+  // 이어서 작성(초안 복원) / 새로 시작(초안 폐기).
+  const resumeWip = () => {
+    if (wip) applyDraft(wip.data)
+    setWip(null)
+  }
+  const dismissWip = () => {
+    try {
+      localStorage.removeItem(WIP_KEY)
+    } catch {
+      /* 무시 */
+    }
+    setWip(null)
+  }
 
   // 엔터로 추가/이동 후 해당 멤버 입력에 포커스
   useEffect(() => {
@@ -649,6 +721,7 @@ export function SettleForm({
           // 내가 만든 정산 표시 → 익명 생성이면 결과 페이지가 '내역에 저장(claim)' 유도(ADR-038 후속).
           try {
             localStorage.setItem(`payven:mine:${res.slug}`, '1')
+            localStorage.removeItem(WIP_KEY) // 작성 완료 → '이어서 작성' 초안 비움
           } catch {
             /* 스토리지 차단 무시 */
           }
@@ -890,6 +963,34 @@ export function SettleForm({
           </div>
           <ThemeToggle />
         </header>
+      )}
+
+      {/* 이어서 작성 — 1차만 입력하고 닫았다 다시 연 경우 등, 작성 중이던 초안을 복원/새로 선택. */}
+      {wip && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-brand/30 bg-brand/5 px-4 py-3 dark:border-brand/40 dark:bg-brand/10">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-brand-700 dark:text-brand">작성 중이던 정산이 있어요</p>
+            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+              {savedAgo(wip.savedAt)} 저장 · 이어서 차수를 더할 수 있어요
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={dismissWip}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-neutral-500 transition active:scale-95 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
+            >
+              새로 시작
+            </button>
+            <button
+              type="button"
+              onClick={resumeWip}
+              className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white transition active:scale-95"
+            >
+              이어서 작성
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 수정은 교체 — 보냈어요 기록이 있으면 초기화됨을 경고. */}
