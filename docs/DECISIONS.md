@@ -312,6 +312,6 @@
 - **변경 = 게이트 제거(1줄):** `quickSettleAction`/`addItemizedBillAction`에서 `if(!user) return {needLogin}` 삭제 → `createQuickSettle/addItemizedBill(input, user?.id ?? null)`. 미로그인 = **익명 생성(`owner_id` null)**. 계좌 저장(maybeSaveAccount)은 로그인 시만. `needLogin`은 이제 **'수정' 액션 전용**(소유자 가드).
 - **DB·스키마 무변경:** `owner_id` 이미 nullable, RPC `p_owner_id uuid default null`(0007/0011) → `ownerId ?? undefined`로 파라미터 생략 시 기본 null. **익명 그룹은 수정 RPC가 거부**(`p_owner_id is null` 가드, 0010) = 익명 생성자는 수정 불가(의도된 한계, 소유권 없음). 하드룰 6(withRateLimit+zod) 유지.
 - **측정 영향:** viewer→creator 신호가 '새 owner_id'→**'새 그룹(특히 익명 owner null)'**으로 바뀜(익명 생성자는 owner 없음). 광고/실제 자리 창의 신규 그룹 수로 측정.
-- **한계·후속(Phase 2):** 익명 정산은 내역에 안 남음(소유자 없음). 후속 = 결과 페이지 "로그인하면 이 정산도 내역에 저장" **claim**(owner null→user.id 부여) + ②결과 카드 공유 훅. 이번엔 마찰 제거만.
-- **검증:** tsc·test **90**·lint·build + **프리뷰 e2e(로그아웃 생성)**: 10,000원·2명 정산하기 → 로그인 시트 없이 `/g/.../settle` 도달, 콘솔 `create_attempted`→`settlement_created`(login_gate_shown 없음), 실DB `owner_id=null` 확인(테스트 그룹 정리). 
-- **상태:** 확정·라이브 대기.
+- **한계·후속:** 익명 정산은 내역에 안 남음(소유자 없음). → ✅ **후속 ②③ 라이브(2026-06-27, 성장 루프):** ②**동적 OG 공유카드**(`settle/opengraph-image.tsx` next/og+Pretendard, 카톡에 링크 붙이면 Wrapped식 카드, `7793dc8`) ③**claim**(결과 페이지 '내역에 저장'→`claimGroup` owner null→user.id, localStorage 'payven:mine:<slug>' 마커[viewer엔 안 뜸]+owner-null 보안가드, `99fbfa8`). 영수증 스캔 로그인은 유지(유료 Gemini)하되 혜택 카피로(`22fe20e`).
+- **검증:** tsc·test **90**·lint·build + **프리뷰 e2e(로그아웃 생성)**: 정산하기 → 로그인 시트 없이 `/g/.../settle` 도달, 콘솔 `settlement_created`(login_gate_shown 없음), 실DB `owner_id=null` 확인. ②OG=실데이터 PNG 한글 렌더 실측, ③claim=마커 있으면 배너 노출·없으면 안 뜸 실측.
+- **상태:** 확정·라이브(①`6ec715d` · ②`7793dc8` · ③`99fbfa8`). 폰 스모크 잔여(claim OAuth 왕복·OG 카톡 실측).
