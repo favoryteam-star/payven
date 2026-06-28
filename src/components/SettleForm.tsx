@@ -424,7 +424,7 @@ export function SettleForm({
     }
   }
   const removeMember = (i: number) => {
-    if (members.length <= 2) return
+    if (i === 0 || members.length <= 2) return // 멤버 0(나)은 삭제 불가 — 받는 계좌가 항상 '나'에 남게(이름만 변경)
     setMembers((p) => p.filter((_, idx) => idx !== i))
     setRounds((p) =>
       p.map((rd) => ({
@@ -815,14 +815,24 @@ export function SettleForm({
               enterKeyHint="next"
               className="w-full rounded-xl border border-neutral-200 bg-transparent px-4 py-3 text-[16px] outline-none focus:border-brand focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-neutral-700"
             />
-            {members.length > 2 && (
+            {/* 첫 칸 = '나'(받는 계좌가 항상 여기 붙음) → 삭제 불가·이름만 변경. 친구만 ✕. 빈 칸은 정렬용. */}
+            {i === 0 ? (
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center text-xs font-medium text-neutral-400 dark:text-neutral-500"
+                aria-hidden="true"
+              >
+                나
+              </span>
+            ) : members.length > 2 ? (
               <button
                 onClick={() => removeMember(i)}
-                aria-label={`${i === 0 ? '나' : `친구 ${i}`} 삭제`}
+                aria-label={`친구 ${i} 삭제`}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base leading-none text-neutral-400 transition active:scale-90 hover:bg-neutral-100 hover:text-neutral-500 dark:hover:bg-neutral-800"
               >
                 ✕
               </button>
+            ) : (
+              <span className="h-11 w-11 shrink-0" aria-hidden="true" />
             )}
           </div>
         ))}
